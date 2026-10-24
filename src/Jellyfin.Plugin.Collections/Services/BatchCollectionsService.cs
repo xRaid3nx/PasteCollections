@@ -219,6 +219,7 @@ public sealed class BatchCollectionsService
                 AlreadyPresent = 0,
                 Failed = failed,
                 Poster = poster.Outcome,
+                Backdrop = poster.Backdrop,
                 PosterMessage = poster.Message.Length == 0 ? null : poster.Message
             };
         }
@@ -229,17 +230,17 @@ public sealed class BatchCollectionsService
     }
 
     /// <summary>
-    /// Gets existing collections that have no poster, sorted by name.
+    /// Gets existing collections that are missing a poster or a backdrop, sorted by name.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Collection summaries.</returns>
     public IReadOnlyList<CollectionSummaryDto> GetCollectionsWithoutPoster(CancellationToken cancellationToken)
     {
-        return [.. GetCollections(cancellationToken).Where(c => _artwork.NeedsPoster(c.Id))];
+        return [.. GetCollections(cancellationToken).Where(c => _artwork.NeedsArtwork(c.Id))];
     }
 
     /// <summary>
-    /// Gives an existing collection a poster. Collections that already have one are left alone.
+    /// Fills in a missing poster and backdrop on an existing collection. Existing artwork is left alone.
     /// </summary>
     /// <param name="request">The request.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -259,10 +260,10 @@ public sealed class BatchCollectionsService
         await _applyLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var poster = _artwork.NeedsPoster(collection.Id)
+            var poster = _artwork.NeedsArtwork(collection.Id)
                 ? await AddPosterAsync(collection.Id, collection.Name, [], request.Poster, false, cancellationToken).ConfigureAwait(false)
-                : new PosterResult(PosterOutcome.NotAttempted, "It already has a poster.");
-            return new PosterResponse { CollectionId = collection.Id, Poster = poster.Outcome, Message = poster.Message };
+                : new PosterResult(PosterOutcome.NotAttempted, "It already has a poster and a backdrop.");
+            return new PosterResponse { CollectionId = collection.Id, Poster = poster.Outcome, Backdrop = poster.Backdrop, Message = poster.Message };
         }
         finally
         {

@@ -124,7 +124,7 @@
                                         <option value="Off">Off</option>
                                     </select>
                                 </div>
-                                <div class="fieldDescription">Only used when a new collection is created. The collage uses the first four posters from your list.</div>
+                                <div class="fieldDescription">Only used when a new collection is created. The collages use the first four posters and backdrops from your list.</div>
                             </div>
 
                             <div class="bc-checks">
@@ -202,8 +202,8 @@
                     </details>
 
                     <details class="bc-presets" id="bcFillPanel">
-                        <summary>Posters for existing collections</summary>
-                        <p class="fieldDescription">Gives every collection that has no poster one, the same way new collections get one. Collections that already have a poster are never changed. Locked collections skip TMDB and go straight to the collage.</p>
+                        <summary>Artwork for existing collections</summary>
+                        <p class="fieldDescription">Fills in a missing poster and backdrop on every collection, the same way new collections get them. Artwork that already exists is never replaced. Locked collections skip TMDB and go straight to the collages.</p>
                         <label class="bc-label" for="bcFillMode">Poster</label>
                         <div class="bc-row">
                             <div class="selectContainer">
@@ -213,7 +213,7 @@
                                 </select>
                             </div>
                             <div class="bc-buttons">
-                                <button is="emby-button" type="button" id="bcFillRun" class="raised emby-button"><span>Add posters to collections without one</span></button>
+                                <button is="emby-button" type="button" id="bcFillRun" class="raised emby-button"><span>Add missing posters and backdrops</span></button>
                             </div>
                         </div>
                         <div class="fieldDescription bc-seerr-status" id="bcFillStatus" aria-live="polite"></div>
@@ -223,7 +223,7 @@
                                     <tr>
                                         <th scope="col">Collection</th>
                                         <th scope="col">Items</th>
-                                        <th scope="col">Poster</th>
+                                        <th scope="col">Artwork</th>
                                     </tr>
                                 </thead>
                                 <tbody id="bcFillRows"></tbody>
@@ -841,7 +841,7 @@
                     summary.appendChild(el('p', { text: (response.Created ? 'Created "' : 'Updated "') + response.CollectionName + '": ' + response.Added + ' item(s) added, ' + response.AlreadyPresent + ' already present.' }));
                     if (response.Warning) { summary.appendChild(el('div', { className: 'bc-warning', text: response.Warning })); }
                     if (response.Created && response.PosterMessage) {
-                        summary.appendChild(el('p', { className: response.Poster === 'None' ? 'bc-warning' : 'fieldDescription', text: 'Poster: ' + response.PosterMessage }));
+                        summary.appendChild(el('p', { className: response.Poster === 'None' ? 'bc-warning' : 'fieldDescription', text: 'Artwork: ' + response.PosterMessage }));
                     }
                     if (response.Failed && response.Failed.length) {
                         summary.appendChild(el('div', { className: 'bc-warning', text: response.Failed.length + ' item(s) were rejected by the server because they are no longer movies or series in the library.' }));
@@ -1091,14 +1091,22 @@
                     });
                 }
 
-                // ---------- Posters for existing collections ----------
+                // ---------- Artwork for existing collections ----------
 
-                var posterLabels = { Tmdb: 'From TMDB', Collage: 'Collage', SinglePoster: 'Single poster', None: 'No poster', NotAttempted: 'Skipped' };
+                var artworkLabels = { Tmdb: 'from TMDB', Collage: 'collage', SinglePoster: 'one item\'s', SingleBackdrop: 'one item\'s', None: 'none' };
 
-                function fillCell(cell, outcome, message) {
+                function artworkAdded(outcome) {
+                    return outcome === 'Tmdb' || outcome === 'Collage' || outcome === 'SinglePoster' || outcome === 'SingleBackdrop';
+                }
+
+                function fillCell(cell, response) {
                     clear(cell);
-                    cell.appendChild(el('span', { className: 'bc-badge bc-p-' + outcome, text: posterLabels[outcome] || outcome }));
-                    if (message) { cell.appendChild(el('span', { className: 'bc-note', text: ' ' + message })); }
+                    [['Poster', response.Poster], ['Backdrop', response.Backdrop]].forEach(function (pair) {
+                        if (!pair[1] || pair[1] === 'NotAttempted') { return; }
+                        cell.appendChild(el('span', { className: 'bc-badge bc-p-' + (artworkAdded(pair[1]) ? 'Collage' : 'None'), text: pair[0] + ': ' + (artworkLabels[pair[1]] || pair[1]) }));
+                        cell.appendChild(document.createTextNode(' '));
+                    });
+                    if (response.Message) { cell.appendChild(el('span', { className: 'bc-note', text: response.Message })); }
                 }
 
                 function onFillPosters() {
@@ -1109,15 +1117,15 @@
                     var finish = function () { state.fillBusy = false; button.disabled = false; };
                     state.fillBusy = true;
                     button.disabled = true;
-                    status.textContent = 'Looking for collections without a poster…';
+                    status.textContent = 'Looking for collections with missing artwork…';
                     ApiClient.ajax({ type: 'GET', url: ApiClient.getUrl('PasteCollections/Posters/Missing'), dataType: 'json' }).then(function (list) {
                         list = list || [];
                         if (!list.length) {
-                            status.textContent = 'Every collection already has a poster.';
+                            status.textContent = 'Every collection already has a poster and a backdrop.';
                             return finish();
                         }
-                        if (!window.confirm(list.length + ' collection(s) have no poster. Add posters to them now?')) {
-                            status.textContent = list.length + ' collection(s) have no poster.';
+                        if (!window.confirm(list.length + ' collection(s) are missing a poster or a backdrop. Add them now?')) {
+                            status.textContent = list.length + ' collection(s) are missing a poster or a backdrop.';
                             return finish();
                         }
                         var rows = $('#bcFillRows');
@@ -1132,16 +1140,16 @@
                         return list.reduce(function (chain, c, i) {
                             return chain.then(function () {
                                 cells[i].textContent = 'Working…';
-                                status.textContent = 'Adding posters: ' + (i + 1) + ' of ' + list.length + '…';
+                                status.textContent = 'Adding artwork: ' + (i + 1) + ' of ' + list.length + '…';
                                 return post('PasteCollections/Posters/Add', { CollectionId: c.Id, Poster: mode }).then(function (response) {
-                                    fillCell(cells[i], response.Poster, response.Message);
-                                    if (response.Poster === 'Tmdb' || response.Poster === 'Collage' || response.Poster === 'SinglePoster') { added++; }
+                                    fillCell(cells[i], response);
+                                    if (artworkAdded(response.Poster) || artworkAdded(response.Backdrop)) { added++; }
                                 }, function (err) {
-                                    return readError(err).then(function (message) { fillCell(cells[i], 'None', message); });
+                                    return readError(err).then(function (message) { fillCell(cells[i], { Poster: 'None', Message: message }); });
                                 });
                             });
                         }, Promise.resolve()).then(function () {
-                            status.textContent = added + ' of ' + list.length + ' collection(s) got a poster.';
+                            status.textContent = added + ' of ' + list.length + ' collection(s) got new artwork.';
                             finish();
                         });
                     }, function (err) {

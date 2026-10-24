@@ -19,7 +19,12 @@ public sealed class PosterResponse
     public PosterOutcome Poster { get; set; }
 
     /// <summary>
-    /// Gets or sets a readable explanation of <see cref="Poster"/>.
+    /// Gets or sets which backdrop the collection got.
+    /// </summary>
+    public BackdropOutcome Backdrop { get; set; }
+
+    /// <summary>
+    /// Gets or sets a readable explanation of <see cref="Poster"/> and <see cref="Backdrop"/>.
     /// </summary>
     public string Message { get; set; } = string.Empty;
 }

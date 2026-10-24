@@ -92,6 +92,12 @@ foreach ($m in $posterColors.Keys) {
   $graphics.Dispose()
   $bitmap.Save((Join-Path $movies "$m\poster.jpg"), [System.Drawing.Imaging.ImageFormat]::Jpeg)
   $bitmap.Dispose()
+  $bitmap = New-Object System.Drawing.Bitmap 1280, 720
+  $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+  $graphics.Clear([System.Drawing.Color]::FromName($posterColors[$m]))
+  $graphics.Dispose()
+  $bitmap.Save((Join-Path $movies "$m\backdrop.jpg"), [System.Drawing.Imaging.ImageFormat]::Jpeg)
+  $bitmap.Dispose()
 }
 
 Step 'Building and installing the plugin into the sandbox'
@@ -226,20 +232,32 @@ try {
   $image.Dispose()
   Check ($size -eq '600x900') "collage is poster-shaped 600x900 (got $size)"
   Check ($topLeft.ToArgb() -ne $bottomRight.ToArgb()) 'collage shows more than one poster'
+  Check ($posterApply.Backdrop -eq 'Collage') "new collection got a backdrop collage (got '$($posterApply.Backdrop)')"
+  Check (@($item.BackdropImageTags).Count -ge 1) 'collection has a backdrop'
+  $backdropFile = Join-Path $sandbox 'collection-backdrop.jpg'
+  Invoke-WebRequest -UseBasicParsing -Uri "$base/Items/$($posterApply.CollectionId)/Images/Backdrop/0" -OutFile $backdropFile
+  $image = [System.Drawing.Image]::FromFile($backdropFile)
+  $size = "$($image.Width)x$($image.Height)"
+  $topLeft = ([System.Drawing.Bitmap]$image).GetPixel(40, 40)
+  $bottomRight = ([System.Drawing.Bitmap]$image).GetPixel($image.Width - 40, $image.Height - 40)
+  $image.Dispose()
+  Check ($size -eq '1920x1080') "backdrop collage is 1920x1080 (got $size)"
+  Check ($topLeft.ToArgb() -ne $bottomRight.ToArgb()) 'backdrop collage shows more than one backdrop'
   $offApply = Api POST 'PasteCollections/Apply' @{ CollectionName = 'Smoke No Poster'; Poster = 'Off'; ItemIds = @($pixarIds[0]) } $token
   Check ($offApply.Created -and $offApply.Poster -eq 'NotAttempted') "poster 'Off' leaves artwork alone (got '$($offApply.Poster)')"
 
-  Step 'Posters for existing collections'
+  Step 'Artwork for existing collections'
   $missing = Api GET 'PasteCollections/Posters/Missing' $null $token
-  Write-Host "    Without a poster: $(($missing | ForEach-Object { $_.Name }) -join ', ')"
-  Check (@($missing | Where-Object { $_.Id -eq $offApply.CollectionId }).Count -eq 1) 'collection without a poster is listed'
-  Check (@($missing | Where-Object { $_.Id -eq $posterApply.CollectionId }).Count -eq 0) 'collection with a poster is not listed'
+  Write-Host "    Missing artwork: $(($missing | ForEach-Object { $_.Name }) -join ', ')"
+  Check (@($missing | Where-Object { $_.Id -eq $offApply.CollectionId }).Count -eq 1) 'collection without artwork is listed'
+  Check (@($missing | Where-Object { $_.Id -eq $posterApply.CollectionId }).Count -eq 0) 'collection with a poster and backdrop is not listed'
   $fill = Api POST 'PasteCollections/Posters/Add' @{ CollectionId = $offApply.CollectionId; Poster = 'TmdbThenCollage' } $token
   Check ($fill.Poster -eq 'SinglePoster') "one-item collection got its item's poster (got '$($fill.Poster)': $($fill.Message))"
+  Check ($fill.Backdrop -eq 'SingleBackdrop') "one-item collection got its item's backdrop (got '$($fill.Backdrop)')"
   $item = Api GET ("Users/$($auth.User.Id)/Items/$($offApply.CollectionId)") $null $token
-  Check ($null -ne $item.ImageTags.Primary) 'existing collection now has a primary image'
+  Check ($null -ne $item.ImageTags.Primary -and @($item.BackdropImageTags).Count -ge 1) 'existing collection now has a poster and a backdrop'
   $again = Api POST 'PasteCollections/Posters/Add' @{ CollectionId = $offApply.CollectionId; Poster = 'TmdbThenCollage' } $token
-  Check ($again.Poster -eq 'NotAttempted') "a collection with a poster is left alone (got '$($again.Poster)')"
+  Check ($again.Poster -eq 'NotAttempted' -and $again.Backdrop -eq 'NotAttempted') "a collection with full artwork is left alone (got '$($again.Poster)', '$($again.Backdrop)')"
 
   $log = Get-ChildItem (Join-Path $sandbox 'log') -Filter '*.log' | Sort-Object LastWriteTime | Select-Object -Last 1
   $pluginLines = Select-String -Path $log.FullName -Pattern 'Paste Collections' | Select-Object -First 8

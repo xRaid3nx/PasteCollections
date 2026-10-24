@@ -99,7 +99,7 @@ public class BatchCollectionsServiceTests
         var withPoster = _collections.Seed("Pixar", Id("Coco", 2017));
         _collections.Seed("Zoo Movies", Id("Moana", 2016));
         _collections.Seed("Animals", Id("Coco", 2017), Id("Moana", 2016));
-        _artwork.WithPoster.Add(withPoster);
+        _artwork.WithArtwork.Add(withPoster);
 
         var list = _service.GetCollectionsWithoutPoster(CancellationToken.None);
 
@@ -127,7 +127,7 @@ public class BatchCollectionsServiceTests
     public async Task AddPosterToExisting_LeavesExistingPosterAlone()
     {
         var id = _collections.Seed("Disney Classics", Id("Coco", 2017));
-        _artwork.WithPoster.Add(id);
+        _artwork.WithArtwork.Add(id);
 
         var response = await _service.AddPosterToExistingAsync(new PosterRequest { CollectionId = id }, CancellationToken.None);
 

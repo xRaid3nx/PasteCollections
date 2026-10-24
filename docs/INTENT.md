@@ -35,6 +35,7 @@ Secondary goal: publishable later (clean, documented, GPL-3.0, tested, installab
 - **Seerr requests** (requested by the owner, 2026-10-24). Not found lines can be requested in Seerr, one at a time or all at once. Seerr address and API key live in the plugin configuration. A title is requested only when Seerr has exactly one result with the same title (and the same year if the line has one); otherwise the user picks. Media Seerr reports as requested or available is not re-requested.
 
 - **Posters for new collections** (requested by the owner, 2026-10-24). On create only: identify the collection on TMDB with a strict name match; otherwise build a 2×2 collage from the first four member posters (like Plex). Options: TMDB then collage (default), TMDB only, off. Apply never touches existing collections' posters.
-- **Posters for existing collections** (requested by the owner, 2026-10-24). One button fills in collections that have no poster, the same way. Collections with a poster are never changed.
+- **Posters for existing collections** (requested by the owner, 2026-10-24). One button fills in a missing poster and/or backdrop, the same way. Existing artwork is never replaced.
+- **Backdrop collage** (requested by the owner, 2026-10-24). When TMDB has no backdrop, a 16:9 collage of the first four member backdrops (the owner chose a collage over rotating or single backdrops).
 
 Do **not** add features beyond the build prompt and the additions listed above.

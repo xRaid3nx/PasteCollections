@@ -12,14 +12,15 @@ namespace Jellyfin.Plugin.Collections.Services;
 public interface ICollectionArtwork
 {
     /// <summary>
-    /// Whether the collection exists and has no poster.
+    /// Whether the collection exists and is missing a poster or a backdrop.
     /// </summary>
     /// <param name="collectionId">The collection.</param>
-    /// <returns><c>true</c> if it has no primary image.</returns>
-    bool NeedsPoster(Guid collectionId);
+    /// <returns><c>true</c> if it has no primary image or no backdrop.</returns>
+    bool NeedsArtwork(Guid collectionId);
 
     /// <summary>
-    /// Identifies the collection on TMDB and, if allowed, falls back to a collage of its members' posters.
+    /// Fills in a missing poster and backdrop: TMDB first (only when the poster is missing), then, if allowed,
+    /// collages of the members' posters and backdrops. Existing artwork is never replaced.
     /// Locked collections skip TMDB, because identifying would rewrite their metadata.
     /// </summary>
     /// <param name="collectionId">The collection.</param>

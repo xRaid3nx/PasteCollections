@@ -16,6 +16,10 @@
     <PackageReference Include="Jellyfin.Common" Version="$(JellyfinVersion)">
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
+    <!-- Must match the SkiaSharp that ships with the targeted Jellyfin server; the server's copy is used at runtime. -->
+    <PackageReference Include="SkiaSharp" Version="3.119.4">
+      <ExcludeAssets>runtime;native</ExcludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>

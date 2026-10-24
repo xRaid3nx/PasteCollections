@@ -63,35 +63,73 @@ public sealed class CollectionArtwork : ICollectionArtwork
             return new PosterResult(PosterOutcome.None, "The collection could not be found to add a poster.");
         }
 
-        if (collection.IsLocked && mode == PosterMode.TmdbOnly)
+        var needPoster = !collection.HasImage(ImageType.Primary, 0);
+        var needBackdrop = !collection.HasImage(ImageType.Backdrop, 0);
+        if (!needPoster && !needBackdrop)
         {
-            return new PosterResult(PosterOutcome.None, "The collection's metadata is locked, so TMDB was skipped.");
+            return new PosterResult(PosterOutcome.NotAttempted, "It already has a poster and a backdrop.");
         }
 
-        var tmdb = collection.IsLocked ? null : await IdentifyAsync(collection, name, cancellationToken).ConfigureAwait(false);
-        if (tmdb is not null && collection.HasImage(ImageType.Primary, 0))
+        var poster = PosterOutcome.NotAttempted;
+        var backdrop = BackdropOutcome.NotAttempted;
+        var messages = new List<string>();
+        string? tmdb = null;
+        if (needPoster)
         {
-            return new PosterResult(PosterOutcome.Tmdb, "Poster from TMDB (" + tmdb + ").");
+            if (collection.IsLocked)
+            {
+                messages.Add("The metadata is locked, so TMDB was skipped.");
+            }
+            else
+            {
+                tmdb = await IdentifyAsync(collection, name, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (collection.HasImage(ImageType.Primary, 0))
+            {
+                poster = PosterOutcome.Tmdb;
+                messages.Add(tmdb is null ? "Jellyfin already found a poster." : "Poster from TMDB (" + tmdb + ").");
+            }
+            else if (mode == PosterMode.TmdbOnly)
+            {
+                poster = PosterOutcome.None;
+                messages.Add(tmdb is null ? "No matching collection on TMDB, so there is no poster." : "TMDB has no poster for " + tmdb + ".");
+            }
         }
 
-        if (collection.HasImage(ImageType.Primary, 0))
+        if (needBackdrop && collection.HasImage(ImageType.Backdrop, 0))
         {
-            return new PosterResult(PosterOutcome.Tmdb, "Jellyfin already found a poster.");
+            backdrop = BackdropOutcome.Tmdb;
+            needBackdrop = false;
         }
 
-        if (mode == PosterMode.TmdbOnly)
+        var collagePoster = needPoster && poster == PosterOutcome.NotAttempted;
+        if (mode == PosterMode.TmdbThenCollage && (collagePoster || needBackdrop))
         {
-            return new PosterResult(PosterOutcome.None, tmdb is null ? "No matching collection on TMDB, so there is no poster." : "TMDB has no poster for " + tmdb + ".");
+            var members = memberIds.Count > 0 ? memberIds : [.. collection.GetLinkedChildren().Select(item => item.Id)];
+            if (collagePoster)
+            {
+                var made = await AddPosterCollageAsync(collection, members, cancellationToken).ConfigureAwait(false);
+                poster = made.Outcome;
+                messages.Add(made.Message);
+            }
+
+            if (needBackdrop)
+            {
+                var made = await AddBackdropCollageAsync(collection, members, cancellationToken).ConfigureAwait(false);
+                backdrop = made.Backdrop;
+                messages.Add(made.Message);
+            }
         }
 
-        var members = memberIds.Count > 0 ? memberIds : [.. collection.GetLinkedChildren().Select(item => item.Id)];
-        return await AddCollageAsync(collection, members, cancellationToken).ConfigureAwait(false);
+        return new PosterResult(poster, string.Join(" ", messages), backdrop);
     }
 
     /// <inheritdoc />
-    public bool NeedsPoster(Guid collectionId)
+    public bool NeedsArtwork(Guid collectionId)
     {
-        return _libraryManager.GetItemById(collectionId) is BoxSet collection && !collection.HasImage(ImageType.Primary, 0);
+        return _libraryManager.GetItemById(collectionId) is BoxSet collection
+            && (!collection.HasImage(ImageType.Primary, 0) || !collection.HasImage(ImageType.Backdrop, 0));
     }
 
     /// <inheritdoc />
@@ -157,7 +195,7 @@ public sealed class CollectionArtwork : ICollectionArtwork
             {
                 MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
                 ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-                ReplaceAllImages = true,
+                ReplaceAllImages = false,
                 SearchResult = match
             },
             cancellationToken).ConfigureAwait(false);
@@ -165,22 +203,72 @@ public sealed class CollectionArtwork : ICollectionArtwork
         return match.Name;
     }
 
-    private async Task<PosterResult> AddCollageAsync(BoxSet collection, IReadOnlyList<Guid> memberIds, CancellationToken cancellationToken)
+    private List<string> GetMemberImages(IReadOnlyList<Guid> memberIds, ImageType type, int max)
     {
-        var posters = new List<string>(CollageTiles);
+        var paths = new List<string>(max);
         foreach (var id in memberIds)
         {
-            var path = _libraryManager.GetItemById(id)?.GetImageInfo(ImageType.Primary, 0) is { IsLocalFile: true } image ? image.Path : null;
-            if (!string.IsNullOrEmpty(path) && File.Exists(path) && !posters.Contains(path, StringComparer.OrdinalIgnoreCase))
+            var path = _libraryManager.GetItemById(id)?.GetImageInfo(type, 0) is { IsLocalFile: true } image ? image.Path : null;
+            if (!string.IsNullOrEmpty(path) && File.Exists(path) && !paths.Contains(path, StringComparer.OrdinalIgnoreCase))
             {
-                posters.Add(path);
-                if (posters.Count == CollageTiles)
+                paths.Add(path);
+                if (paths.Count == max)
                 {
                     break;
                 }
             }
         }
 
+        return paths;
+    }
+
+    private async Task<PosterResult> AddBackdropCollageAsync(BoxSet collection, IReadOnlyList<Guid> memberIds, CancellationToken cancellationToken)
+    {
+        var backdrops = GetMemberImages(memberIds, ImageType.Backdrop, BackdropCollage.MaxTiles);
+        if (backdrops.Count == 0)
+        {
+            return new PosterResult(PosterOutcome.NotAttempted, "None of the items have a backdrop, so no backdrop was made.", BackdropOutcome.None);
+        }
+
+        var output = Path.Combine(Path.GetTempPath(), "paste-collections-" + Guid.NewGuid().ToString("N") + Path.GetExtension(backdrops[0]));
+        try
+        {
+            BackdropOutcome outcome;
+            if (backdrops.Count == 1)
+            {
+                File.Copy(backdrops[0], output);
+                outcome = BackdropOutcome.SingleBackdrop;
+            }
+            else
+            {
+                output = Path.ChangeExtension(output, ".jpg");
+                BackdropCollage.Build(backdrops, output);
+                outcome = BackdropOutcome.Collage;
+            }
+
+            await _providerManager.SaveImage(collection, output, MimeFor(output), ImageType.Backdrop, null, false, cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("Paste Collections: gave collection {Name} a {Outcome} backdrop from {Count} item(s)", collection.Name, outcome, backdrops.Count);
+            return outcome == BackdropOutcome.Collage
+                ? new PosterResult(PosterOutcome.NotAttempted, "Backdrop collage made from " + backdrops.Count + " backdrops.", outcome)
+                : new PosterResult(PosterOutcome.NotAttempted, "Used the backdrop of the only item that has one.", outcome);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
+        {
+            _logger.LogWarning(ex, "Paste Collections: could not make a backdrop for collection {Name}", collection.Name);
+            return new PosterResult(PosterOutcome.NotAttempted, "Could not make a backdrop. Check the server log.", BackdropOutcome.None);
+        }
+        finally
+        {
+            if (File.Exists(output))
+            {
+                File.Delete(output);
+            }
+        }
+    }
+
+    private async Task<PosterResult> AddPosterCollageAsync(BoxSet collection, IReadOnlyList<Guid> memberIds, CancellationToken cancellationToken)
+    {
+        var posters = GetMemberImages(memberIds, ImageType.Primary, CollageTiles);
         if (posters.Count == 0)
         {
             return new PosterResult(PosterOutcome.None, "None of the items have a poster yet, so no collage was made.");

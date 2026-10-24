@@ -40,9 +40,9 @@ internal sealed class FakeArtwork : ICollectionArtwork
 
     public bool Throw { get; set; }
 
-    public HashSet<Guid> WithPoster { get; } = [];
+    public HashSet<Guid> WithArtwork { get; } = [];
 
-    public bool NeedsPoster(Guid collectionId) => !WithPoster.Contains(collectionId);
+    public bool NeedsArtwork(Guid collectionId) => !WithArtwork.Contains(collectionId);
 
     public Task<PosterResult> AddPosterAsync(Guid collectionId, string name, IReadOnlyList<Guid> memberIds, PosterMode mode, CancellationToken cancellationToken)
     {

@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Versions use Jellyfin's four-part format.
 
+## 1.1.2.2
+
+- Backdrop collage: when TMDB doesn't supply a backdrop, collections get a 1920×1080 collage of the first four members' backdrops (2×2; two or three backdrops use a split layout; one is used as-is).
+- The existing-collections button now fills in a missing poster and/or backdrop, so collections that already have a poster also get a backdrop. Existing artwork is never replaced, and the TMDB lookup now only adds missing images.
+
 ## 1.1.2.0
 
 - Posters for existing collections: one button finds every collection without a poster and gives each one a TMDB poster or a collage. Collections that already have a poster are left alone, and locked collections skip TMDB.
