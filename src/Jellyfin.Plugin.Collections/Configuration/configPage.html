@@ -65,6 +65,9 @@
             .pasteCollectionsPage .bc-s-AlreadyRequested, .pasteCollectionsPage .bc-s-AlreadyAvailable { background: rgba(128,128,128,.3); }
             .pasteCollectionsPage .bc-s-Failed { background: rgba(203,36,49,.4); }
             .pasteCollectionsPage .bc-seerr-status { margin-top: .6em; }
+            .pasteCollectionsPage .bc-p-Tmdb, .pasteCollectionsPage .bc-p-Collage, .pasteCollectionsPage .bc-p-SinglePoster { background: rgba(46,160,67,.35); }
+            .pasteCollectionsPage .bc-p-None { background: rgba(219,154,4,.4); }
+            .pasteCollectionsPage #bcFillTable { margin-top: .8em; }
         </style>
         <div data-role="content">
             <div class="content-primary">
@@ -197,6 +200,36 @@
                         </div>
                         <div class="fieldDescription bc-seerr-status" id="bcSeerrStatus"></div>
                     </details>
+
+                    <details class="bc-presets" id="bcFillPanel">
+                        <summary>Posters for existing collections</summary>
+                        <p class="fieldDescription">Gives every collection that has no poster one, the same way new collections get one. Collections that already have a poster are never changed. Locked collections skip TMDB and go straight to the collage.</p>
+                        <label class="bc-label" for="bcFillMode">Poster</label>
+                        <div class="bc-row">
+                            <div class="selectContainer">
+                                <select is="emby-select" id="bcFillMode" class="emby-select-withcolor emby-select">
+                                    <option value="TmdbThenCollage">Find on TMDB, otherwise make a collage</option>
+                                    <option value="TmdbOnly">Find on TMDB only</option>
+                                </select>
+                            </div>
+                            <div class="bc-buttons">
+                                <button is="emby-button" type="button" id="bcFillRun" class="raised emby-button"><span>Add posters to collections without one</span></button>
+                            </div>
+                        </div>
+                        <div class="fieldDescription bc-seerr-status" id="bcFillStatus" aria-live="polite"></div>
+                        <div class="bc-tablewrap bc-hidden" id="bcFillTable">
+                            <table class="bc-table">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Collection</th>
+                                        <th scope="col">Items</th>
+                                        <th scope="col">Poster</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bcFillRows"></tbody>
+                            </table>
+                        </div>
+                    </details>
                 </form>
 
                 <div id="bcResults" class="bc-section bc-hidden" aria-live="polite">
@@ -288,7 +321,7 @@
                     NotFound: { label: 'Not found', order: 6 }
                 };
 
-                var state = { config: null, preview: null, previewMediaTypes: 'Both', rows: [], collections: [], lastReport: null, seerr: {}, seerrBusy: false };
+                var state = { config: null, preview: null, previewMediaTypes: 'Both', rows: [], collections: [], lastReport: null, seerr: {}, seerrBusy: false, fillBusy: false };
                 var seerrChunk = 10;
                 var seerrLabels = { Requested: 'Requested', AlreadyRequested: 'Already requested', AlreadyAvailable: 'Available in Seerr', NeedsChoice: 'Pick a match', NotFound: 'Not in Seerr', Failed: 'Failed' };
 
@@ -403,6 +436,7 @@
                         $('#bcFuzzy').checked = config.LastFuzzy !== false;
                         $('#bcLock').checked = !!config.LastLockMetadata;
                         $('#bcPoster').value = config.LastPosterMode || 'TmdbThenCollage';
+                        $('#bcFillMode').value = config.LastPosterMode === 'TmdbOnly' ? 'TmdbOnly' : 'TmdbThenCollage';
                         if (!$('#bcCollectionName').value && config.LastCollectionName) {
                             $('#bcCollectionName').value = config.LastCollectionName;
                         }
@@ -1057,6 +1091,64 @@
                     });
                 }
 
+                // ---------- Posters for existing collections ----------
+
+                var posterLabels = { Tmdb: 'From TMDB', Collage: 'Collage', SinglePoster: 'Single poster', None: 'No poster', NotAttempted: 'Skipped' };
+
+                function fillCell(cell, outcome, message) {
+                    clear(cell);
+                    cell.appendChild(el('span', { className: 'bc-badge bc-p-' + outcome, text: posterLabels[outcome] || outcome }));
+                    if (message) { cell.appendChild(el('span', { className: 'bc-note', text: ' ' + message })); }
+                }
+
+                function onFillPosters() {
+                    if (state.fillBusy) { return; }
+                    var mode = $('#bcFillMode').value;
+                    var status = $('#bcFillStatus');
+                    var button = $('#bcFillRun');
+                    var finish = function () { state.fillBusy = false; button.disabled = false; };
+                    state.fillBusy = true;
+                    button.disabled = true;
+                    status.textContent = 'Looking for collections without a poster…';
+                    ApiClient.ajax({ type: 'GET', url: ApiClient.getUrl('PasteCollections/Posters/Missing'), dataType: 'json' }).then(function (list) {
+                        list = list || [];
+                        if (!list.length) {
+                            status.textContent = 'Every collection already has a poster.';
+                            return finish();
+                        }
+                        if (!window.confirm(list.length + ' collection(s) have no poster. Add posters to them now?')) {
+                            status.textContent = list.length + ' collection(s) have no poster.';
+                            return finish();
+                        }
+                        var rows = $('#bcFillRows');
+                        clear(rows);
+                        $('#bcFillTable').classList.remove('bc-hidden');
+                        var cells = list.map(function (c) {
+                            var cell = el('td', { className: 'bc-note', text: 'Waiting' });
+                            rows.appendChild(el('tr', null, [el('td', { text: c.Name }), el('td', { text: String(c.ItemCount) }), cell]));
+                            return cell;
+                        });
+                        var added = 0;
+                        return list.reduce(function (chain, c, i) {
+                            return chain.then(function () {
+                                cells[i].textContent = 'Working…';
+                                status.textContent = 'Adding posters: ' + (i + 1) + ' of ' + list.length + '…';
+                                return post('PasteCollections/Posters/Add', { CollectionId: c.Id, Poster: mode }).then(function (response) {
+                                    fillCell(cells[i], response.Poster, response.Message);
+                                    if (response.Poster === 'Tmdb' || response.Poster === 'Collage' || response.Poster === 'SinglePoster') { added++; }
+                                }, function (err) {
+                                    return readError(err).then(function (message) { fillCell(cells[i], 'None', message); });
+                                });
+                            });
+                        }, Promise.resolve()).then(function () {
+                            status.textContent = added + ' of ' + list.length + ' collection(s) got a poster.';
+                            finish();
+                        });
+                    }, function (err) {
+                        readError(err).then(function (message) { status.textContent = message; finish(); });
+                    });
+                }
+
                 // ---------- Wiring ----------
 
                 $('#bcForm').addEventListener('submit', onPreview);
@@ -1074,6 +1166,7 @@
                 $('#bcPresetDelete').addEventListener('click', onPresetDelete);
                 $('#bcSeerrSave').addEventListener('click', onSeerrSave);
                 $('#bcSeerrTest').addEventListener('click', onSeerrTest);
+                $('#bcFillRun').addEventListener('click', onFillPosters);
                 Array.prototype.forEach.call(page.querySelectorAll('.bc-seerr-all'), function (button) {
                     button.addEventListener('click', onSeerrAll);
                 });

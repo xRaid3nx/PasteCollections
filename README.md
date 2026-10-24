@@ -119,7 +119,11 @@ When Apply creates a new collection, **New collection poster** decides how it ge
 - **Find on TMDB only:** use TMDB artwork when there's a clear match, and leave it blank otherwise.
 - **Off:** leave artwork to Jellyfin.
 
-Existing collections are never changed. The report after Apply says which poster was used.
+Apply never changes the poster of an existing collection. The report after Apply says which poster was used.
+
+### Posters for existing collections
+
+Open **Posters for existing collections** and click **Add posters to collections without one**. The plugin lists every collection that has no poster, asks you to confirm, and then gives each one a poster the same way (TMDB first, otherwise a collage of its first four posters). Collections that already have a poster are never changed. Locked collections skip TMDB, because identifying them would rewrite their metadata, and go straight to the collage.
 
 **Tip: presets.** Open **Presets** to save a list under a name. When you add more movies later, load the preset and apply it again; only the new ones get added.
 

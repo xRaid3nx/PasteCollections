@@ -93,6 +93,77 @@ public class BatchCollectionsServiceTests
         await Assert.ThrowsAsync<BatchRequestException>(() => ApplyWithPoster("x", (PosterMode)42, false, Id("Moana", 2016)));
     }
 
+    [Fact]
+    public void CollectionsWithoutPoster_ListsOnlyBlankOnes_SortedByName()
+    {
+        var withPoster = _collections.Seed("Pixar", Id("Coco", 2017));
+        _collections.Seed("Zoo Movies", Id("Moana", 2016));
+        _collections.Seed("Animals", Id("Coco", 2017), Id("Moana", 2016));
+        _artwork.WithPoster.Add(withPoster);
+
+        var list = _service.GetCollectionsWithoutPoster(CancellationToken.None);
+
+        Assert.Equal(["Animals", "Zoo Movies"], list.Select(c => c.Name));
+        Assert.Equal(2, list[0].ItemCount);
+    }
+
+    [Fact]
+    public async Task AddPosterToExisting_UsesTheCollectionsOwnOrder()
+    {
+        var id = _collections.Seed("Disney Classics", Id("Coco", 2017));
+
+        var response = await _service.AddPosterToExistingAsync(new PosterRequest { CollectionId = id, Poster = PosterMode.TmdbThenCollage }, CancellationToken.None);
+
+        var call = Assert.Single(_artwork.Calls);
+        Assert.Equal(id, call.CollectionId);
+        Assert.Equal("Disney Classics", call.Name);
+        Assert.Empty(call.MemberIds);
+        Assert.Empty(_artwork.Locked);
+        Assert.Equal(PosterOutcome.Collage, response.Poster);
+        Assert.Equal("Collage made from 4 posters.", response.Message);
+    }
+
+    [Fact]
+    public async Task AddPosterToExisting_LeavesExistingPosterAlone()
+    {
+        var id = _collections.Seed("Disney Classics", Id("Coco", 2017));
+        _artwork.WithPoster.Add(id);
+
+        var response = await _service.AddPosterToExistingAsync(new PosterRequest { CollectionId = id }, CancellationToken.None);
+
+        Assert.Empty(_artwork.Calls);
+        Assert.Equal(PosterOutcome.NotAttempted, response.Poster);
+    }
+
+    [Fact]
+    public async Task AddPosterToExisting_FailureBecomesAMessage()
+    {
+        var id = _collections.Seed("Disney Classics", Id("Coco", 2017));
+        _artwork.Throw = true;
+
+        var response = await _service.AddPosterToExistingAsync(new PosterRequest { CollectionId = id }, CancellationToken.None);
+
+        Assert.Equal(PosterOutcome.None, response.Poster);
+        Assert.Equal("Could not add a poster. Check the server log.", response.Message);
+    }
+
+    [Theory]
+    [InlineData(PosterMode.Off)]
+    [InlineData((PosterMode)42)]
+    public async Task AddPosterToExisting_RejectsOffAndUnknownModes(PosterMode mode)
+    {
+        var id = _collections.Seed("Disney Classics", Id("Coco", 2017));
+
+        await Assert.ThrowsAsync<BatchRequestException>(() => _service.AddPosterToExistingAsync(new PosterRequest { CollectionId = id, Poster = mode }, CancellationToken.None));
+        Assert.Empty(_artwork.Calls);
+    }
+
+    [Fact]
+    public async Task AddPosterToExisting_UnknownCollection_IsRejected()
+    {
+        await Assert.ThrowsAsync<BatchRequestException>(() => _service.AddPosterToExistingAsync(new PosterRequest { CollectionId = Guid.NewGuid() }, CancellationToken.None));
+    }
+
     [Theory]
     [InlineData("Toy Story", "Toy Story Collection", true)]
     [InlineData("Toy Story Collection", "Toy Story Collection", true)]

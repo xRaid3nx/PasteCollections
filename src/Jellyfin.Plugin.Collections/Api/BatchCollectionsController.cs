@@ -101,6 +101,33 @@ public class BatchCollectionsController : ControllerBase
     }
 
     /// <summary>
+    /// Lists existing collections that have no poster.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The collections.</returns>
+    [HttpGet("Posters/Missing")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<IReadOnlyList<CollectionSummaryDto>> GetCollectionsWithoutPoster(CancellationToken cancellationToken)
+    {
+        return Run(() => Ok(_service.GetCollectionsWithoutPoster(cancellationToken)), "list collections without a poster");
+    }
+
+    /// <summary>
+    /// Gives one existing collection a poster, if it has none.
+    /// </summary>
+    /// <param name="request">The collection and poster mode.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>What happened.</returns>
+    [HttpPost("Posters/Add")]
+    [Consumes(MediaTypeNames.Application.Json)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<PosterResponse>> AddPoster([FromBody] PosterRequest request, CancellationToken cancellationToken)
+    {
+        return await RunAsync(async () => Ok(await _service.AddPosterToExistingAsync(request, cancellationToken).ConfigureAwait(false)), "add poster").ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Checks that Seerr answers and accepts the API key.
     /// </summary>
     /// <param name="request">The address and key to test; blank values use the saved settings.</param>

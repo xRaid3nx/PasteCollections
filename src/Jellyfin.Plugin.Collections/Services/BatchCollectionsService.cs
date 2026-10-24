@@ -228,6 +228,48 @@ public sealed class BatchCollectionsService
         }
     }
 
+    /// <summary>
+    /// Gets existing collections that have no poster, sorted by name.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Collection summaries.</returns>
+    public IReadOnlyList<CollectionSummaryDto> GetCollectionsWithoutPoster(CancellationToken cancellationToken)
+    {
+        return [.. GetCollections(cancellationToken).Where(c => _artwork.NeedsPoster(c.Id))];
+    }
+
+    /// <summary>
+    /// Gives an existing collection a poster. Collections that already have one are left alone.
+    /// </summary>
+    /// <param name="request">The request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>What happened.</returns>
+    /// <exception cref="BatchRequestException">The request is invalid.</exception>
+    public async Task<PosterResponse> AddPosterToExistingAsync(PosterRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!Enum.IsDefined(request.Poster) || request.Poster == PosterMode.Off)
+        {
+            throw new BatchRequestException("Choose how to find the poster.");
+        }
+
+        var collection = _collections.GetCollections(cancellationToken).FirstOrDefault(c => c.Id.Equals(request.CollectionId))
+            ?? throw new BatchRequestException("That collection no longer exists.");
+
+        await _applyLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var poster = _artwork.NeedsPoster(collection.Id)
+                ? await AddPosterAsync(collection.Id, collection.Name, [], request.Poster, false, cancellationToken).ConfigureAwait(false)
+                : new PosterResult(PosterOutcome.NotAttempted, "It already has a poster.");
+            return new PosterResponse { CollectionId = collection.Id, Poster = poster.Outcome, Message = poster.Message };
+        }
+        finally
+        {
+            _applyLock.Release();
+        }
+    }
+
     private async Task<PosterResult> AddPosterAsync(Guid collectionId, string name, IReadOnlyList<Guid> memberIds, PosterMode mode, bool lockAfter, CancellationToken cancellationToken)
     {
         if (mode == PosterMode.Off)

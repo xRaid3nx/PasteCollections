@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here. Versions use Jellyfin's four-part format.
 
+## 1.1.2.0
+
+- Posters for existing collections: one button finds every collection without a poster and gives each one a TMDB poster or a collage. Collections that already have a poster are left alone, and locked collections skip TMDB.
+
 ## 1.1.1.1
 
 - New collection poster: when Apply creates a collection, it is looked up on TMDB (only an exact name match, with or without "Collection"). If there's no match, a 2×2 collage is made from the first four posters in your list. Choose "Find on TMDB only" or "Off" instead under **New collection poster**. The report says which poster was used.

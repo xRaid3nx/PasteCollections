@@ -229,6 +229,18 @@ try {
   $offApply = Api POST 'PasteCollections/Apply' @{ CollectionName = 'Smoke No Poster'; Poster = 'Off'; ItemIds = @($pixarIds[0]) } $token
   Check ($offApply.Created -and $offApply.Poster -eq 'NotAttempted') "poster 'Off' leaves artwork alone (got '$($offApply.Poster)')"
 
+  Step 'Posters for existing collections'
+  $missing = Api GET 'PasteCollections/Posters/Missing' $null $token
+  Write-Host "    Without a poster: $(($missing | ForEach-Object { $_.Name }) -join ', ')"
+  Check (@($missing | Where-Object { $_.Id -eq $offApply.CollectionId }).Count -eq 1) 'collection without a poster is listed'
+  Check (@($missing | Where-Object { $_.Id -eq $posterApply.CollectionId }).Count -eq 0) 'collection with a poster is not listed'
+  $fill = Api POST 'PasteCollections/Posters/Add' @{ CollectionId = $offApply.CollectionId; Poster = 'TmdbThenCollage' } $token
+  Check ($fill.Poster -eq 'SinglePoster') "one-item collection got its item's poster (got '$($fill.Poster)': $($fill.Message))"
+  $item = Api GET ("Users/$($auth.User.Id)/Items/$($offApply.CollectionId)") $null $token
+  Check ($null -ne $item.ImageTags.Primary) 'existing collection now has a primary image'
+  $again = Api POST 'PasteCollections/Posters/Add' @{ CollectionId = $offApply.CollectionId; Poster = 'TmdbThenCollage' } $token
+  Check ($again.Poster -eq 'NotAttempted') "a collection with a poster is left alone (got '$($again.Poster)')"
+
   $log = Get-ChildItem (Join-Path $sandbox 'log') -Filter '*.log' | Sort-Object LastWriteTime | Select-Object -Last 1
   $pluginLines = Select-String -Path $log.FullName -Pattern 'Paste Collections' | Select-Object -First 8
   Step 'Plugin log lines'

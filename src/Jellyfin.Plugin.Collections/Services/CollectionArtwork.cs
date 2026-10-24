@@ -18,7 +18,7 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.Collections.Services;
 
 /// <summary>
-/// Adds a poster to a new collection using Jellyfin's own provider and image APIs.
+/// Adds a poster to a collection using Jellyfin's own provider and image APIs.
 /// </summary>
 public sealed class CollectionArtwork : ICollectionArtwork
 {
@@ -60,10 +60,15 @@ public sealed class CollectionArtwork : ICollectionArtwork
 
         if (_libraryManager.GetItemById(collectionId) is not BoxSet collection)
         {
-            return new PosterResult(PosterOutcome.None, "The new collection could not be found to add a poster.");
+            return new PosterResult(PosterOutcome.None, "The collection could not be found to add a poster.");
         }
 
-        var tmdb = await IdentifyAsync(collection, name, cancellationToken).ConfigureAwait(false);
+        if (collection.IsLocked && mode == PosterMode.TmdbOnly)
+        {
+            return new PosterResult(PosterOutcome.None, "The collection's metadata is locked, so TMDB was skipped.");
+        }
+
+        var tmdb = collection.IsLocked ? null : await IdentifyAsync(collection, name, cancellationToken).ConfigureAwait(false);
         if (tmdb is not null && collection.HasImage(ImageType.Primary, 0))
         {
             return new PosterResult(PosterOutcome.Tmdb, "Poster from TMDB (" + tmdb + ").");
@@ -79,7 +84,14 @@ public sealed class CollectionArtwork : ICollectionArtwork
             return new PosterResult(PosterOutcome.None, tmdb is null ? "No matching collection on TMDB, so there is no poster." : "TMDB has no poster for " + tmdb + ".");
         }
 
-        return await AddCollageAsync(collection, memberIds, cancellationToken).ConfigureAwait(false);
+        var members = memberIds.Count > 0 ? memberIds : [.. collection.GetLinkedChildren().Select(item => item.Id)];
+        return await AddCollageAsync(collection, members, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public bool NeedsPoster(Guid collectionId)
+    {
+        return _libraryManager.GetItemById(collectionId) is BoxSet collection && !collection.HasImage(ImageType.Primary, 0);
     }
 
     /// <inheritdoc />
