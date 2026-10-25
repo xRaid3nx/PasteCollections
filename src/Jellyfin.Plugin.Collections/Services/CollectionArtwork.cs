@@ -246,7 +246,7 @@ public sealed class CollectionArtwork : ICollectionArtwork
                 outcome = BackdropOutcome.Collage;
             }
 
-            await _providerManager.SaveImage(collection, output, MimeFor(output), ImageType.Backdrop, null, false, cancellationToken).ConfigureAwait(false);
+            await SaveImageAsync(collection, output, ImageType.Backdrop, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation("Paste Collections: gave collection {Name} a {Outcome} backdrop from {Count} item(s)", collection.Name, outcome, backdrops.Count);
             return outcome == BackdropOutcome.Collage
                 ? new PosterResult(PosterOutcome.NotAttempted, "Backdrop collage made from " + backdrops.Count + " backdrops.", outcome)
@@ -295,7 +295,7 @@ public sealed class CollectionArtwork : ICollectionArtwork
                 return new PosterResult(PosterOutcome.None, "Jellyfin could not build the collage.");
             }
 
-            await _providerManager.SaveImage(collection, output, MimeFor(output), ImageType.Primary, null, false, cancellationToken).ConfigureAwait(false);
+            await SaveImageAsync(collection, output, ImageType.Primary, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation("Paste Collections: gave collection {Name} a {Outcome} poster from {Count} item(s)", collection.Name, outcome, posters.Count);
             return outcome == PosterOutcome.Collage
                 ? new PosterResult(outcome, "Collage made from " + posters.Count + " posters.")
@@ -313,6 +313,14 @@ public sealed class CollectionArtwork : ICollectionArtwork
                 File.Delete(output);
             }
         }
+    }
+
+    private async Task SaveImageAsync(BoxSet collection, string path, ImageType type, CancellationToken cancellationToken)
+    {
+        await _providerManager.SaveImage(collection, path, MimeFor(path), type, null, false, cancellationToken).ConfigureAwait(false);
+
+        // SaveImage only updates the in-memory item; without this the image is lost when Jellyfin reloads it.
+        await collection.UpdateToRepositoryAsync(ItemUpdateType.ImageUpdate, cancellationToken).ConfigureAwait(false);
     }
 
     private static string MimeFor(string path) => Path.GetExtension(path).ToUpperInvariant() switch

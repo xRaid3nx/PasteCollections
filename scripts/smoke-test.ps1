@@ -10,6 +10,7 @@
     - Preview statuses (exact year, ambiguous, bare-year fallback, name variants, not found, series)
     - Apply creates the collection, a second Apply adds nothing (idempotent)
     - non-admin and anonymous callers are rejected
+    - poster and backdrop collages for new and existing collections, and that they survive a server restart
   The sandbox server is stopped at the end. Use -Keep to leave it running for a manual look in the browser.
 
 .EXAMPLE
@@ -109,21 +110,29 @@ Copy-Item (Join-Path $repoRoot 'src\Jellyfin.Plugin.Collections\bin\Release\net1
 
 # ---- Start --------------------------------------------------------------------------
 Step "Starting sandbox Jellyfin on port $Port"
-$exe = Join-Path $JellyfinDir 'jellyfin.exe'
-$proc = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden -WorkingDirectory $JellyfinDir -ArgumentList @(
-  '--datadir', "`"$data`"", '--cachedir', "`"$(Join-Path $sandbox 'cache')`"", '--logdir', "`"$(Join-Path $sandbox 'log')`"",
-  '--webdir', "`"$(Join-Path $JellyfinDir 'jellyfin-web')`"", '--ffmpeg', "`"$(Join-Path $JellyfinDir 'ffmpeg.exe')`"")
-
-try {
+function StartSandbox([string]$token = '') {
+  $exe = Join-Path $JellyfinDir 'jellyfin.exe'
+  $started = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden -WorkingDirectory $JellyfinDir -ArgumentList @(
+    '--datadir', "`"$data`"", '--cachedir', "`"$(Join-Path $sandbox 'cache')`"", '--logdir', "`"$(Join-Path $sandbox 'log')`"",
+    '--webdir', "`"$(Join-Path $JellyfinDir 'jellyfin-web')`"", '--ffmpeg', "`"$(Join-Path $JellyfinDir 'ffmpeg.exe')`"")
   $deadline = (Get-Date).AddMinutes(3)
   # Jellyfin 12 answers System/Info/Public from a temporary startup server while migrating; wait for the real one.
+  # Startup/Configuration needs a token once the wizard is done, so a restart probes System/Info instead.
   while ($true) {
-    try { Api GET 'Startup/Configuration' | Out-Null; $info = Api GET 'System/Info/Public'; break } catch { }
-    if ($proc.HasExited) { throw "Sandbox Jellyfin exited (code $($proc.ExitCode)). See $sandbox\log." }
+    try {
+      if ($token) { $info = Api GET 'System/Info' $null $token } else { Api GET 'Startup/Configuration' | Out-Null; $info = Api GET 'System/Info/Public' }
+      break
+    } catch { }
+    if ($started.HasExited) { throw "Sandbox Jellyfin exited (code $($started.ExitCode)). See $sandbox\log." }
     if ((Get-Date) -gt $deadline) { throw 'Sandbox Jellyfin did not start within 3 minutes.' }
     Start-Sleep -Seconds 2
   }
   Write-Host "    Server $($info.Version) is up"
+  return $started
+}
+$proc = StartSandbox
+
+try {
 
   Step 'Running the startup wizard'
   Api POST 'Startup/Configuration' @{ UICulture = 'en-US'; MetadataCountryCode = 'US'; PreferredMetadataLanguage = 'en' } | Out-Null
@@ -249,6 +258,17 @@ try {
   Check ($null -ne $item.ImageTags.Primary -and @($item.BackdropImageTags).Count -ge 1) 'existing collection now has a poster and a backdrop'
   $again = Api POST 'PasteCollections/Posters/Add' @{ CollectionId = $offApply.CollectionId; Poster = 'TmdbThenCollage' } $token
   Check ($again.Poster -eq 'NotAttempted' -and $again.Backdrop -eq 'NotAttempted') "a collection with full artwork is left alone (got '$($again.Poster)', '$($again.Backdrop)')"
+
+  Step 'Artwork survives a server restart'
+  Stop-Process -Id $proc.Id -Force
+  $proc.WaitForExit()
+  $proc = StartSandbox $token
+  foreach ($c in @(@{ Id = $posterApply.CollectionId; Name = 'Smoke Poster Picks' }, @{ Id = $offApply.CollectionId; Name = 'Smoke No Poster' })) {
+    $item = Api GET ("Users/$($auth.User.Id)/Items/$($c.Id)") $null $token
+    Check ($null -ne $item.ImageTags.Primary -and @($item.BackdropImageTags).Count -ge 1) "'$($c.Name)' still has a poster and a backdrop after restart"
+  }
+  $missing = Api GET 'PasteCollections/Posters/Missing' $null $token
+  Check (@($missing | Where-Object { $_.Id -eq $offApply.CollectionId -or $_.Id -eq $posterApply.CollectionId }).Count -eq 0) 'filled collections are not listed as missing artwork after restart'
 
   $log = Get-ChildItem (Join-Path $sandbox 'log') -Filter '*.log' | Sort-Object LastWriteTime | Select-Object -Last 1
   $pluginLines = Select-String -Path $log.FullName -Pattern 'Paste Collections' | Select-Object -First 8

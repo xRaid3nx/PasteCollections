@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here. Versions use Jellyfin's four-part format.
 
+## 1.1.2.4
+
+- Fixed: posters and backdrops added by the plugin were not saved to Jellyfin's database, so they disappeared after a restart, a plugin update, or when Jellyfin reloaded the collection, and "Add missing posters and backdrops" kept re-adding them. Run it once more after updating and the artwork will stick.
+
 ## 1.1.2.3
 
 - The first collection on a new server no longer comes out empty: Jellyfin's one-time Collections folder scan could drop its members, so Apply now waits for that scan and re-adds anything missing.
