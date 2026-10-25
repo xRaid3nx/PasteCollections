@@ -9,6 +9,14 @@
         "imageUrl":  "https://raw.githubusercontent.com/xRaid3nx/PasteCollections/main/docs/images/thumb.png",
         "versions":  [
                          {
+                             "version":  "1.1.2.4",
+                             "changelog":  "Paste Collections 1.1.2.4 for Jellyfin 12.2.0. See CHANGELOG.md.",
+                             "targetAbi":  "12.2.0.0",
+                             "sourceUrl":  "https://github.com/xRaid3nx/PasteCollections/releases/download/v1.1.2.4/paste-collections_1.1.2.4_jf12.2.0.zip",
+                             "checksum":  "c219c5dd22b61f2e3ea9d6dd5026c145",
+                             "timestamp":  "2026-10-25T16:16:38Z"
+                         },
+                         {
                              "version":  "1.1.2.3",
                              "changelog":  "Paste Collections 1.1.2.3 for Jellyfin 12.2.0. See CHANGELOG.md.",
                              "targetAbi":  "12.2.0.0",
