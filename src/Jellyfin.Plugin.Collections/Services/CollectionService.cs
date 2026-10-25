@@ -10,6 +10,7 @@ using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.Collections.Services;
@@ -23,8 +24,13 @@ public sealed class CollectionService : ICollectionService
     // straight after a write can miss them. Recent writes are merged into reads until the library catches up.
     private static readonly TimeSpan _recentWriteLifetime = TimeSpan.FromMinutes(5);
 
+    private static readonly TimeSpan _scanStartDelay = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan _scanPollInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan _scanWaitLimit = TimeSpan.FromSeconds(60);
+
     private readonly ILibraryManager _libraryManager;
     private readonly ICollectionManager _collectionManager;
+    private readonly ITaskManager _taskManager;
     private readonly ILogger<CollectionService> _logger;
     private readonly Dictionary<Guid, RecentWrite> _recentWrites = [];
     private readonly Lock _recentLock = new();
@@ -34,11 +40,13 @@ public sealed class CollectionService : ICollectionService
     /// </summary>
     /// <param name="libraryManager">The library manager.</param>
     /// <param name="collectionManager">The collection manager.</param>
+    /// <param name="taskManager">The scheduled task manager.</param>
     /// <param name="logger">The logger.</param>
-    public CollectionService(ILibraryManager libraryManager, ICollectionManager collectionManager, ILogger<CollectionService> logger)
+    public CollectionService(ILibraryManager libraryManager, ICollectionManager collectionManager, ITaskManager taskManager, ILogger<CollectionService> logger)
     {
         _libraryManager = libraryManager;
         _collectionManager = collectionManager;
+        _taskManager = taskManager;
         _logger = logger;
     }
 
@@ -133,6 +141,52 @@ public sealed class CollectionService : ICollectionService
         await _collectionManager.AddToCollectionAsync(collectionId, itemIds).ConfigureAwait(false);
         RememberWrite(collectionId, null, itemIds);
         _logger.LogInformation("Paste Collections: added {Count} items to collection {Id}", itemIds.Count, collectionId);
+    }
+
+    /// <inheritdoc />
+    public async Task<int> EnsureMembersAsync(Guid collectionId, IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(itemIds);
+        await WaitForLibraryScanAsync(cancellationToken).ConfigureAwait(false);
+
+        var stored = _libraryManager.GetItemList(new InternalItemsQuery
+        {
+            ItemIds = [collectionId],
+            IncludeItemTypes = [BaseItemKind.BoxSet],
+            DtoOptions = DtoOptions.StoredColumnsOnly
+        }).OfType<BoxSet>().FirstOrDefault();
+        if (stored is null)
+        {
+            return 0;
+        }
+
+        var members = GetMemberIds(stored);
+        var missing = itemIds.Where(id => !members.Contains(id)).ToList();
+        if (missing.Count == 0)
+        {
+            return 0;
+        }
+
+        _logger.LogWarning("Paste Collections: the library scan dropped {Count} items from new collection {Id}; adding them again", missing.Count, collectionId);
+        await _collectionManager.AddToCollectionAsync(collectionId, missing).ConfigureAwait(false);
+        return missing.Count;
+    }
+
+    private async Task WaitForLibraryScanAsync(CancellationToken cancellationToken)
+    {
+        var scan = _taskManager.ScheduledTasks.FirstOrDefault(t => string.Equals(t.ScheduledTask.Key, "RefreshLibrary", StringComparison.Ordinal));
+        if (scan is null)
+        {
+            return;
+        }
+
+        // The scan starts shortly after the Collections folder is created, so give it a moment to begin.
+        await Task.Delay(_scanStartDelay, cancellationToken).ConfigureAwait(false);
+        var deadline = DateTime.UtcNow + _scanWaitLimit;
+        while (scan.State != TaskState.Idle && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(_scanPollInterval, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private void RememberWrite(Guid collectionId, string? name, IReadOnlyCollection<Guid> itemIds)

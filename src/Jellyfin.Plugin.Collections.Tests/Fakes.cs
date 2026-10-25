@@ -85,6 +85,16 @@ internal sealed class FakeCollections : ICollectionService
         return Task.FromResult(id);
     }
 
+    public List<Guid> EnsureCalls { get; } = [];
+
+    public int Dropped { get; set; }
+
+    public Task<int> EnsureMembersAsync(Guid collectionId, IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken)
+    {
+        EnsureCalls.Add(collectionId);
+        return Task.FromResult(Dropped);
+    }
+
     public Task AddAsync(Guid collectionId, IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken)
     {
         if (itemIds.Count == 0)

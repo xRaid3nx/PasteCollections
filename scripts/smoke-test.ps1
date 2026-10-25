@@ -148,15 +148,6 @@ try {
     $count = (Api GET 'Items?Recursive=true&IncludeItemTypes=Movie,Series&Limit=0' $null $token).TotalRecordCount
   } while ($count -lt 10 -and (Get-Date) -lt $deadline)
   Check ($count -ge 10) "library scanned ($count of 10 movies/series)"
-  # The first collection on a server makes Jellyfin create its Collections folder and rescan the library, and that scan
-  # races with saving the collection. A warm-up collection gets this out of the way, like on a server that already has one.
-  Api POST 'Collections?name=Smoke%20Warm-up' $null $token | Out-Null
-  $deadline = (Get-Date).AddMinutes(2)
-  do {
-    Start-Sleep -Seconds 2
-    $scan = (Api GET 'ScheduledTasks' $null $token) | Where-Object { $_.Key -eq 'RefreshLibrary' }
-  } while ($scan.State -ne 'Idle' -and (Get-Date) -lt $deadline)
-
   Step 'Plugin registration'
   $plugin = (Api GET 'Plugins' $null $token) | Where-Object { ($_.Id -replace '-', '') -eq ($pluginGuid -replace '-', '') }
   Check ($null -ne $plugin -and $plugin.Status -eq 'Active') "plugin status is Active (got '$($plugin.Status)')"

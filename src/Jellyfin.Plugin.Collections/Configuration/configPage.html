@@ -27,6 +27,7 @@
             .pasteCollectionsPage .bc-row .bc-buttons, .pasteCollectionsPage .bc-toolbar .bc-buttons { margin: 0; flex-wrap: nowrap; align-items: stretch; }
             .pasteCollectionsPage .bc-row .emby-button, .pasteCollectionsPage .bc-toolbar .emby-button { height: auto; }
             .pasteCollectionsPage input.emby-input { min-height: 2.6em; box-sizing: border-box; }
+            .pasteCollectionsPage .inputContainer > .inputLabel:empty { display: none; }
             .pasteCollectionsPage .bc-toolbar { display: grid; grid-template-columns: minmax(10em, 14em) minmax(10em, 14em) auto; column-gap: .75em; align-items: stretch; margin-bottom: 1em; }
             .pasteCollectionsPage .bc-toolbar .selectContainer { margin: 0; display: flex; }
             .pasteCollectionsPage .bc-toolbar .selectContainer > .emby-select { flex: 1 1 auto; width: 100%; height: 100%; box-sizing: border-box; }
@@ -116,15 +117,15 @@
                             </div>
 
                             <div class="bc-field">
-                                <label class="bc-label" for="bcPoster">New collection poster</label>
+                                <label class="bc-label" for="bcPoster">New collection artwork</label>
                                 <div class="selectContainer">
                                     <select is="emby-select" id="bcPoster" class="emby-select-withcolor emby-select">
-                                        <option value="TmdbThenCollage">Find on TMDB, otherwise make a collage</option>
-                                        <option value="TmdbOnly">Find on TMDB only</option>
+                                        <option value="TmdbThenCollage">TMDB, then collage</option>
+                                        <option value="TmdbOnly">TMDB only</option>
                                         <option value="Off">Off</option>
                                     </select>
                                 </div>
-                                <div class="fieldDescription">Only used when a new collection is created. The collages use the first four posters and backdrops from your list.</div>
+                                <div class="fieldDescription">Only used when a new collection is created. Looks for the collection on TMDB; otherwise makes a poster and backdrop collage from the first four items in your list.</div>
                             </div>
 
                             <div class="bc-checks">
@@ -204,17 +205,17 @@
                     <details class="bc-presets" id="bcFillPanel">
                         <summary>Artwork for existing collections</summary>
                         <p class="fieldDescription">Fills in a missing poster and backdrop on every collection, the same way new collections get them. Artwork that already exists is never replaced. Locked collections skip TMDB and go straight to the collages.</p>
-                        <label class="bc-label" for="bcFillMode">Poster</label>
-                        <div class="bc-row">
+                        <div class="bc-field">
+                            <label class="bc-label" for="bcFillMode">Artwork</label>
                             <div class="selectContainer">
                                 <select is="emby-select" id="bcFillMode" class="emby-select-withcolor emby-select">
-                                    <option value="TmdbThenCollage">Find on TMDB, otherwise make a collage</option>
-                                    <option value="TmdbOnly">Find on TMDB only</option>
+                                    <option value="TmdbThenCollage">TMDB, then collage</option>
+                                    <option value="TmdbOnly">TMDB only</option>
                                 </select>
                             </div>
-                            <div class="bc-buttons">
-                                <button is="emby-button" type="button" id="bcFillRun" class="raised emby-button"><span>Add missing posters and backdrops</span></button>
-                            </div>
+                        </div>
+                        <div class="bc-buttons">
+                            <button is="emby-button" type="button" id="bcFillRun" class="raised emby-button"><span>Add missing posters and backdrops</span></button>
                         </div>
                         <div class="fieldDescription bc-seerr-status" id="bcFillStatus" aria-live="polite"></div>
                         <div class="bc-tablewrap bc-hidden" id="bcFillTable">
@@ -437,9 +438,6 @@
                         $('#bcLock').checked = !!config.LastLockMetadata;
                         $('#bcPoster').value = config.LastPosterMode || 'TmdbThenCollage';
                         $('#bcFillMode').value = config.LastPosterMode === 'TmdbOnly' ? 'TmdbOnly' : 'TmdbThenCollage';
-                        if (!$('#bcCollectionName').value && config.LastCollectionName) {
-                            $('#bcCollectionName').value = config.LastCollectionName;
-                        }
                         $('#bcSeerrUrl').value = config.SeerrUrl || '';
                         $('#bcSeerrKey').value = config.SeerrApiKey || '';
                         renderPresets();
@@ -459,7 +457,6 @@
                     state.config.LastFuzzy = $('#bcFuzzy').checked;
                     state.config.LastLockMetadata = $('#bcLock').checked;
                     state.config.LastPosterMode = $('#bcPoster').value;
-                    state.config.LastCollectionName = $('#bcCollectionName').value.trim();
                     saveConfig().catch(function () { /* remembering options is best effort */ });
                 }
 

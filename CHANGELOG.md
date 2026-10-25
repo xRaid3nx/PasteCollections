@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. Versions use Jellyfin's four-part format.
 
+## 1.1.2.3
+
+- The first collection on a new server no longer comes out empty: Jellyfin's one-time Collections folder scan could drop its members, so Apply now waits for that scan and re-adds anything missing.
+- The collection name starts empty on every visit, so a new list isn't added to the previous collection by accident. Other options are still remembered, and presets still fill in their collection name.
+- Layout: the Collection name, Seerr and preset text fields line up with the dropdowns; "New collection poster" is now "New collection artwork" with shorter options ("TMDB, then collage", "TMDB only", "Off"), so they don't get cut off; the "Add missing posters and backdrops" button sits below its dropdown.
+- New README screenshots.
+
 ## 1.1.2.2
 
 - Backdrop collage: when TMDB doesn't supply a backdrop, collections get a 1920×1080 collage of the first four members' backdrops (2×2; two or three backdrops use a split layout; one is used as-is).

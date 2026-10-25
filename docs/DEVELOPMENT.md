@@ -20,7 +20,6 @@
 | `build.yaml`, `manifest.json` | Packaging metadata and the plugin repository manifest |
 | `.github/workflows/` | CI (build and test) and a manual release fallback |
 | `docs/` | `INTENT.md`, `DECISIONS.md`, images, and screenshots |
-| `github/` | Local GitHub push/pull scripts |
 
 ## Build and test
 

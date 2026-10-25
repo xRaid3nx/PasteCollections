@@ -12,7 +12,7 @@ Secondary goal: publishable later (clean, documented, GPL-3.0, tested, installab
 
 ## Behaviour (summary of build prompt §4)
 
-- Inputs: list (max 5,000 lines / 1 MB), collection name (with existing-name suggestions), media type (Movies / Shows / Both; shows are Series only), year tolerance (exact / ±1), fuzzy on/off, lock metadata (new collections only), presets saved in plugin config, last-used options remembered.
+- Inputs: list (max 5,000 lines / 1 MB), collection name (with existing-name suggestions), media type (Movies / Shows / Both; shows are Series only), year tolerance (exact / ±1), fuzzy on/off, lock metadata (new collections only), presets saved in plugin config, last-used options remembered (the collection name is not; it starts empty on every visit so a list isn't added to the wrong collection by accident).
 - Parser: skips blank lines and `#` / `//` comments. Strips bullets, numbering, quotes, and trailing `,` / `;`. Years are read from `(1994)`, `[1994]`, `- 1994`, `, 1994`, `| 1994`, or a TAB before the year. A bare trailing number is treated as part of the title first, then retried as a year. Duplicate lines are collapsed.
 - Normalisation: strict key (diacritics, case, punctuation, articles, trailing year tag) and loose key (strict, plus studio prefixes and number words / roman numerals up to 10).
 - Statuses: Matched, AlreadyInCollection, Ambiguous, PossibleYearOffByOne, PossibleFuzzy (≥ 0.90), YearMismatch, NotFound. Fuzzy and off-by-one matches are never auto-selected.

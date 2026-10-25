@@ -21,3 +21,7 @@ node_modules/
 # Cursor chat archives (local only)
 Chats/
 !Chats/.gitkeep
+
+# Personal tooling (local only)
+.cursor/
+github/

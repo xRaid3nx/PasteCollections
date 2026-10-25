@@ -111,19 +111,21 @@ Each Not found line now has a **Request in Seerr** button, and **Request all "No
 
 Seerr works best when it's connected to the same Jellyfin server, so "available" in Seerr means the same thing as "in your library" here.
 
-### Posters for new collections
+### Artwork for new collections
 
-When Apply creates a new collection, **New collection poster** decides how it gets artwork:
+When Apply creates a new collection, **New collection artwork** decides how it gets a poster and backdrop:
 
-- **Find on TMDB, otherwise make a collage** (default): if TMDB has a collection with the same name (for example *Toy Story* finds *Toy Story Collection*), its poster and background are used. Otherwise the plugin builds a 2×2 collage from the first four posters in your list, so the collection doesn't look like a single movie, and a 1920×1080 backdrop collage from their backdrops.
-- **Find on TMDB only:** use TMDB artwork when there's a clear match, and leave it blank otherwise.
+- **TMDB, then collage** (default): if TMDB has a collection with the same name (for example *Toy Story* finds *Toy Story Collection*), its poster and background are used. Otherwise the plugin builds a 2×2 collage from the first four posters in your list, so the collection doesn't look like a single movie, and a 1920×1080 backdrop collage from their backdrops.
+- **TMDB only:** use TMDB artwork when there's a clear match, and leave it blank otherwise.
 - **Off:** leave artwork to Jellyfin.
 
-Apply never changes the poster of an existing collection. The report after Apply says which poster was used.
+Apply never changes the artwork of an existing collection. The report after Apply says which artwork was used.
 
 ### Artwork for existing collections
 
 Open **Artwork for existing collections** and click **Add missing posters and backdrops**. The plugin lists every collection that is missing a poster or a backdrop, asks you to confirm, and then fills in only what's missing, the same way (TMDB first when the poster is missing, otherwise collages of its first four posters and backdrops). Artwork that already exists is never replaced. Locked collections skip TMDB, because identifying them would rewrite their metadata, and go straight to the collages.
+
+![Artwork for existing collections](docs/screenshots/artwork.png)
 
 **Tip: presets.** Open **Presets** to save a list under a name. When you add more movies later, load the preset and apply it again; only the new ones get added.
 

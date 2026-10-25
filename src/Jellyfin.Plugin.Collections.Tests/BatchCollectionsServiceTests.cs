@@ -94,6 +94,29 @@ public class BatchCollectionsServiceTests
     }
 
     [Fact]
+    public async Task Apply_FirstCollectionOnServer_ChecksMembersAfterTheScan()
+    {
+        _collections.Dropped = 2;
+
+        var response = await ApplyWithPoster("Disney Classics", PosterMode.Off, false, Id("Moana", 2016), Id("Coco", 2017));
+
+        Assert.Equal([response.CollectionId], _collections.EnsureCalls);
+        Assert.Contains("dropped 2 item(s)", response.Warning, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Apply_LaterCollections_DoNotWaitForTheScan()
+    {
+        _collections.Seed("Pixar", Id("Coco", 2017));
+
+        var response = await ApplyWithPoster("Disney Classics", PosterMode.Off, false, Id("Moana", 2016));
+
+        Assert.True(response.Created);
+        Assert.Empty(_collections.EnsureCalls);
+        Assert.Null(response.Warning);
+    }
+
+    [Fact]
     public void CollectionsWithoutPoster_ListsOnlyBlankOnes_SortedByName()
     {
         var withPoster = _collections.Seed("Pixar", Id("Coco", 2017));

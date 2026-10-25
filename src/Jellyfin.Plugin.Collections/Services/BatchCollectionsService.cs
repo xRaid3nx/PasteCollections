@@ -201,6 +201,9 @@ public sealed class BatchCollectionsService
                 throw new BatchRequestException("None of the selected items are movies or series in the library, so no collection was created.");
             }
 
+            // The first collection on a server triggers a library scan that can drop the new members.
+            var firstCollection = _collections.GetCollections(cancellationToken).Count == 0;
+
             // Metadata is locked after the poster is added, otherwise the lock would stop Jellyfin's refresh.
             var lockLater = request.LockMetadata && request.Poster != PosterMode.Off;
             var id = await _collections.CreateAsync(name, validInOrder, request.LockMetadata && !lockLater, cancellationToken).ConfigureAwait(false);
@@ -209,6 +212,24 @@ public sealed class BatchCollectionsService
                 name,
                 validInOrder.Count,
                 failed.Count);
+            string? warning = null;
+            if (firstCollection)
+            {
+                try
+                {
+                    var readded = await _collections.EnsureMembersAsync(id, validInOrder, cancellationToken).ConfigureAwait(false);
+                    if (readded > 0)
+                    {
+                        warning = string.Create(CultureInfo.InvariantCulture, $"Jellyfin's first-collection scan dropped {readded} item(s); they were added back.");
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
+                {
+                    _logger.LogWarning(ex, "Paste Collections: checking the first collection {Collection} failed", name);
+                    warning = "This is the server's first collection. If it shows fewer items than expected, click Apply again.";
+                }
+            }
+
             var poster = await AddPosterAsync(id, name, validInOrder, request.Poster, lockLater, cancellationToken).ConfigureAwait(false);
             return new ApplyResponse
             {
@@ -220,7 +241,8 @@ public sealed class BatchCollectionsService
                 Failed = failed,
                 Poster = poster.Outcome,
                 Backdrop = poster.Backdrop,
-                PosterMessage = poster.Message.Length == 0 ? null : poster.Message
+                PosterMessage = poster.Message.Length == 0 ? null : poster.Message,
+                Warning = warning
             };
         }
         finally

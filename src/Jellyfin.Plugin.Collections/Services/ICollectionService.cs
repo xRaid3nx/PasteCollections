@@ -35,4 +35,13 @@ public interface ICollectionService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task.</returns>
     Task AddAsync(Guid collectionId, IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Waits for the library scan that the first collection on a server triggers, then re-adds any items the scan lost.
+    /// </summary>
+    /// <param name="collectionId">The new collection.</param>
+    /// <param name="itemIds">The items it should contain.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The number of items that had to be re-added.</returns>
+    Task<int> EnsureMembersAsync(Guid collectionId, IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken);
 }
