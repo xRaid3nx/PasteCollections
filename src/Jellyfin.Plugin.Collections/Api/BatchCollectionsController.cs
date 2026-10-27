@@ -4,6 +4,7 @@ using System.Net.Mime;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.Collections.Api.Dto;
+using Jellyfin.Plugin.Collections.Core;
 using Jellyfin.Plugin.Collections.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -25,6 +26,7 @@ public class BatchCollectionsController : ControllerBase
 
     private readonly BatchCollectionsService _service;
     private readonly SeerrService _seerr;
+    private readonly SuggestService _suggest;
     private readonly ILogger<BatchCollectionsController> _logger;
 
     /// <summary>
@@ -32,11 +34,13 @@ public class BatchCollectionsController : ControllerBase
     /// </summary>
     /// <param name="service">The batch collections service.</param>
     /// <param name="seerr">The Seerr service.</param>
+    /// <param name="suggest">The suggest service.</param>
     /// <param name="logger">The logger.</param>
-    public BatchCollectionsController(BatchCollectionsService service, SeerrService seerr, ILogger<BatchCollectionsController> logger)
+    public BatchCollectionsController(BatchCollectionsService service, SeerrService seerr, SuggestService suggest, ILogger<BatchCollectionsController> logger)
     {
         _service = service;
         _seerr = seerr;
+        _suggest = suggest;
         _logger = logger;
     }
 
@@ -155,6 +159,104 @@ public class BatchCollectionsController : ControllerBase
     {
         ArgumentNullException.ThrowIfNull(request);
         return await RunAsync(async () => Ok(await _seerr.RequestAsync(request.Items, cancellationToken).ConfigureAwait(false)), "Seerr request").ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Searches TMDB collections and scores them against the library.
+    /// </summary>
+    /// <param name="request">The query.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The hits.</returns>
+    [HttpPost("Suggest/Search")]
+    [Consumes(MediaTypeNames.Application.Json)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<SuggestHitsResponse>> SuggestSearch([FromBody] SuggestSearchRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return await RunAsync(async () => Ok(await _suggest.SearchAsync(request, cancellationToken).ConfigureAwait(false)), "suggest search").ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Suggests franchises from movies already in the library.
+    /// </summary>
+    /// <param name="request">The scan limits.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The franchises.</returns>
+    [HttpPost("Suggest/FromLibrary")]
+    [Consumes(MediaTypeNames.Application.Json)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<SuggestHitsResponse>> SuggestFromLibrary([FromBody] SuggestLibraryRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return await RunAsync(async () => Ok(await _suggest.FromLibraryAsync(request, cancellationToken).ConfigureAwait(false)), "suggest from library").ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Loads one suggested list so the page can preview it.
+    /// </summary>
+    /// <param name="source">tmdb, trakt or pack.</param>
+    /// <param name="id">The id within that source.</param>
+    /// <param name="mediaTypes">Which kinds to keep.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The titles.</returns>
+    [HttpGet("Suggest/Collection")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<SuggestListResponse>> SuggestCollection(
+        [FromQuery] string source,
+        [FromQuery] string id,
+        [FromQuery] MediaTypes mediaTypes,
+        CancellationToken cancellationToken)
+    {
+        return await RunAsync(async () => Ok(await _suggest.GetAsync(source, id, mediaTypes, cancellationToken).ConfigureAwait(false)), "suggest collection").ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Lists a Trakt user's public lists.
+    /// </summary>
+    /// <param name="request">The username.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The lists.</returns>
+    [HttpPost("Suggest/Trakt/Lists")]
+    [Consumes(MediaTypeNames.Application.Json)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<SuggestHitsResponse>> SuggestTraktLists([FromBody] SuggestTraktRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return await RunAsync(async () => Ok(await _suggest.TraktListsAsync(request, cancellationToken).ConfigureAwait(false)), "suggest trakt lists").ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Loads a Trakt list URL.
+    /// </summary>
+    /// <param name="request">The URL.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The titles.</returns>
+    [HttpPost("Suggest/Trakt/Items")]
+    [Consumes(MediaTypeNames.Application.Json)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<SuggestListResponse>> SuggestTraktItems([FromBody] SuggestTraktRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return await RunAsync(async () => Ok(await _suggest.TraktItemsAsync(request, cancellationToken).ConfigureAwait(false)), "suggest trakt items").ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Lists packs from the configured JSON URL.
+    /// </summary>
+    /// <param name="mediaTypes">Which kinds count as owned.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The packs.</returns>
+    [HttpGet("Suggest/Packs")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<SuggestHitsResponse>> SuggestPacks([FromQuery] MediaTypes mediaTypes, CancellationToken cancellationToken)
+    {
+        return await RunAsync(async () => Ok(await _suggest.PacksAsync(mediaTypes, cancellationToken).ConfigureAwait(false)), "suggest packs").ConfigureAwait(false);
     }
 
     private async Task<ActionResult> RunAsync(Func<Task<ActionResult>> action, string operation)

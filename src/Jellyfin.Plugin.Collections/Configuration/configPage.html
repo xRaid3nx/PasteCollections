@@ -179,6 +179,85 @@
                         </div>
                     </details>
 
+                    <details class="bc-presets" id="bcSuggestPanel">
+                        <summary>Suggest collections</summary>
+                        <p class="fieldDescription">Search a franchise, or see which franchises you already own part of. Choosing one fills this page and runs Preview. Nothing is added until you click Apply, and missing titles are requested in Seerr only after that, the same as a pasted list.</p>
+                        <p class="fieldDescription">Your library is not uploaded. A search sends the words you type. Suggesting from your library sends TMDB ids the server already has, the same kind of lookup Jellyfin uses for metadata. API keys stay in these settings.</p>
+                        <div class="bc-field">
+                            <label class="bc-label" for="bcTmdbKey">TMDB API key</label>
+                            <div class="inputContainer">
+                                <input is="emby-input" id="bcTmdbKey" type="password" autocomplete="off" />
+                            </div>
+                            <div class="fieldDescription">A free v3 key from themoviedb.org. Leave blank to use the key from Jellyfin's TMDB plugin, if one is set.</div>
+                        </div>
+                        <div class="bc-field">
+                            <label class="bc-label" for="bcTraktKey">Trakt client id</label>
+                            <div class="inputContainer">
+                                <input is="emby-input" id="bcTraktKey" type="password" autocomplete="off" />
+                            </div>
+                            <div class="fieldDescription">From trakt.tv/oauth/applications. Used only as an API key. You are not asked to log in.</div>
+                        </div>
+                        <div class="bc-field">
+                            <label class="bc-label" for="bcPacksUrl">Packs URL</label>
+                            <div class="inputContainer">
+                                <input is="emby-input" id="bcPacksUrl" type="url" autocomplete="off" placeholder="https://example.com/packs.json" />
+                            </div>
+                            <div class="fieldDescription">Optional. An http(s) JSON file of named lists. It is downloaded to this server and matched here. See the README for the format.</div>
+                        </div>
+                        <div class="bc-field">
+                            <label class="bc-label" for="bcCacheHours">Remember answers (hours)</label>
+                            <div class="inputContainer">
+                                <input is="emby-input" id="bcCacheHours" type="number" min="0" max="720" value="24" />
+                            </div>
+                            <div class="fieldDescription">How long TMDB and pack answers stay on this server. 0 checks again every time. 720 is 30 days.</div>
+                        </div>
+                        <div class="bc-field">
+                            <label class="bc-label" for="bcMinOwned">Minimum already owned</label>
+                            <div class="inputContainer">
+                                <input is="emby-input" id="bcMinOwned" type="number" min="1" max="5000" value="1" />
+                            </div>
+                            <div class="fieldDescription">Suggest from my library only lists franchises where you already own at least this many movies. Search ignores this. One owned movie is enough to suggest the rest.</div>
+                        </div>
+                        <div class="bc-buttons">
+                            <button is="emby-button" type="button" id="bcSuggestSave" class="raised emby-button"><span>Save suggest settings</span></button>
+                        </div>
+                        <label class="bc-label" for="bcSuggestQuery">Search TMDB collections</label>
+                        <div class="bc-row">
+                            <div class="inputContainer">
+                                <input is="emby-input" id="bcSuggestQuery" type="search" maxlength="100" placeholder="Star Wars" />
+                            </div>
+                            <div class="bc-buttons">
+                                <button is="emby-button" type="button" id="bcSuggestSearch" class="raised emby-button"><span>Search</span></button>
+                            </div>
+                        </div>
+                        <div class="bc-buttons">
+                            <button is="emby-button" type="button" id="bcSuggestLibrary" class="raised emby-button"><span>Suggest from my library</span></button>
+                        </div>
+                        <label class="bc-label" for="bcTraktUser">Trakt username</label>
+                        <div class="bc-row">
+                            <div class="inputContainer">
+                                <input is="emby-input" id="bcTraktUser" type="text" maxlength="80" placeholder="username" />
+                            </div>
+                            <div class="bc-buttons">
+                                <button is="emby-button" type="button" id="bcTraktBrowse" class="raised emby-button"><span>Browse lists</span></button>
+                            </div>
+                        </div>
+                        <label class="bc-label" for="bcTraktUrl">Trakt list URL</label>
+                        <div class="bc-row">
+                            <div class="inputContainer">
+                                <input is="emby-input" id="bcTraktUrl" type="url" placeholder="https://trakt.tv/users/someone/lists/marvel" />
+                            </div>
+                            <div class="bc-buttons">
+                                <button is="emby-button" type="button" id="bcTraktLoad" class="raised emby-button"><span>Load list</span></button>
+                            </div>
+                        </div>
+                        <div class="bc-buttons">
+                            <button is="emby-button" type="button" id="bcPacksLoad" class="raised emby-button"><span>Load packs</span></button>
+                        </div>
+                        <div class="fieldDescription bc-seerr-status" id="bcSuggestStatus" aria-live="polite"></div>
+                        <div id="bcSuggestHits"></div>
+                    </details>
+
                     <details class="bc-presets" id="bcSeerrPanel">
                         <summary>Seerr</summary>
                         <p class="fieldDescription">Connect Seerr to request titles that aren't in your library. Use an address the Jellyfin server can reach.</p>
@@ -322,7 +401,7 @@
                     NotFound: { label: 'Not found', order: 6 }
                 };
 
-                var state = { config: null, preview: null, previewMediaTypes: 'Both', rows: [], collections: [], lastReport: null, seerr: {}, seerrBusy: false, fillBusy: false };
+                var state = { config: null, preview: null, previewMediaTypes: 'Both', rows: [], collections: [], lastReport: null, seerr: {}, seerrBusy: false, fillBusy: false, knownLines: null, knownText: null };
                 var seerrChunk = 10;
                 var seerrLabels = { Requested: 'Requested', AlreadyRequested: 'Already requested', AlreadyAvailable: 'Available in Seerr', NeedsChoice: 'Pick a match', NotFound: 'Not in Seerr', Failed: 'Failed' };
 
@@ -440,6 +519,11 @@
                         $('#bcFillMode').value = config.LastPosterMode === 'TmdbOnly' ? 'TmdbOnly' : 'TmdbThenCollage';
                         $('#bcSeerrUrl').value = config.SeerrUrl || '';
                         $('#bcSeerrKey').value = config.SeerrApiKey || '';
+                        $('#bcTmdbKey').value = config.TmdbApiKey || '';
+                        $('#bcTraktKey').value = config.TraktClientId || '';
+                        $('#bcPacksUrl').value = config.CuratedPacksUrl || '';
+                        $('#bcCacheHours').value = String(config.SuggestCacheHours === 0 ? 0 : (config.SuggestCacheHours || 24));
+                        $('#bcMinOwned').value = String(config.SuggestMinOwned || 1);
                         renderPresets();
                         updateSeerrButtons();
                     });
@@ -487,6 +571,8 @@
                     var preset = findPreset($('#bcPresetSelect').value || '');
                     if (!preset) { return; }
                     $('#bcList').value = preset.Text;
+                    state.knownLines = null;
+                    state.knownText = null;
                     if (preset.LastCollectionName) { $('#bcCollectionName').value = preset.LastCollectionName; }
                     $('#bcPresetName').value = preset.Name;
                     updateLineCount();
@@ -540,6 +626,14 @@
                     $('#bcLineCount').textContent = n.toLocaleString() + (n === 1 ? ' line' : ' lines');
                 }
 
+                function onListInput() {
+                    if (state.knownText !== null && $('#bcList').value !== state.knownText) {
+                        state.knownLines = null;
+                        state.knownText = null;
+                    }
+                    updateLineCount();
+                }
+
                 function onPreview(e) {
                     e.preventDefault();
                     var list = $('#bcList').value;
@@ -551,14 +645,16 @@
 
                     rememberOptions();
                     var mediaTypes = $('#bcMediaTypes').value;
-                    Dashboard.showLoadingMsg();
-                    post('PasteCollections/Preview', {
+                    var body = {
                         List: list,
                         CollectionName: name,
                         MediaTypes: $('#bcMediaTypes').value,
                         YearTolerance: parseInt($('#bcYearTolerance').value, 10) || 0,
                         Fuzzy: $('#bcFuzzy').checked
-                    }).then(function (response) {
+                    };
+                    if (state.knownLines && state.knownText === list) { body.KnownLines = state.knownLines; }
+                    Dashboard.showLoadingMsg();
+                    post('PasteCollections/Preview', body).then(function (response) {
                         Dashboard.hideLoadingMsg();
                         state.previewMediaTypes = mediaTypes;
                         showPreview(response);
@@ -957,6 +1053,9 @@
                         item.MediaType = candidate.MediaType;
                         item.Title = candidate.Title;
                         item.Year = candidate.Year;
+                    } else if (line.TmdbId) {
+                        item.TmdbId = line.TmdbId;
+                        item.MediaType = line.MediaType || (state.previewMediaTypes === 'Shows' ? 'tv' : 'movie');
                     }
                     return item;
                 }
@@ -1156,8 +1255,153 @@
 
                 // ---------- Wiring ----------
 
+                // ---------- Suggest ----------
+
+                function setSuggestStatus(message) {
+                    $('#bcSuggestStatus').textContent = message || '';
+                }
+
+                function mediaTypesNow() {
+                    return $('#bcMediaTypes').value || 'Both';
+                }
+
+                function suggestFail(err) {
+                    readError(err).then(setSuggestStatus);
+                }
+
+                function onSuggestSave() {
+                    if (!state.config) { return; }
+                    state.config.TmdbApiKey = $('#bcTmdbKey').value.trim();
+                    state.config.TraktClientId = $('#bcTraktKey').value.trim();
+                    state.config.CuratedPacksUrl = $('#bcPacksUrl').value.trim();
+                    var hours = parseInt($('#bcCacheHours').value, 10);
+                    var minOwned = parseInt($('#bcMinOwned').value, 10);
+                    state.config.SuggestCacheHours = isNaN(hours) ? 24 : hours;
+                    state.config.SuggestMinOwned = isNaN(minOwned) ? 1 : minOwned;
+                    Dashboard.showLoadingMsg();
+                    saveConfig().then(function () {
+                        Dashboard.hideLoadingMsg();
+                        setSuggestStatus('Suggest settings saved on this server.');
+                    }, function () {
+                        Dashboard.hideLoadingMsg();
+                        setSuggestStatus('Could not save the suggest settings.');
+                    });
+                }
+
+                function ownedLabel(hit) {
+                    if (!hit.Total) { return hit.Owned ? String(hit.Owned) + ' owned' : '—'; }
+                    return hit.Owned + ' of ' + hit.Total;
+                }
+
+                function sourceLabel(source) {
+                    if (source === 'tmdb') { return 'TMDB'; }
+                    if (source === 'trakt') { return 'Trakt'; }
+                    if (source === 'pack') { return 'Pack'; }
+                    return source || '';
+                }
+
+                function renderHits(response) {
+                    var box = $('#bcSuggestHits');
+                    clear(box);
+                    var hits = (response && response.Hits) || [];
+                    setSuggestStatus((response && response.Message) || (hits.length ? '' : 'No collections found.'));
+                    if (!hits.length) { return; }
+                    var table = el('table', { className: 'bc-table' });
+                    var head = el('tr', null, [
+                        el('th', { scope: 'col', text: 'Collection' }),
+                        el('th', { scope: 'col', text: 'In your library' }),
+                        el('th', { scope: 'col', text: 'Source' }),
+                        el('th', { scope: 'col', text: '' })
+                    ]);
+                    table.appendChild(el('thead', null, [head]));
+                    var body = el('tbody');
+                    hits.forEach(function (hit) {
+                        var button = el('button', { type: 'button', className: 'raised emby-button' }, [el('span', { text: 'Use this list' })]);
+                        button.addEventListener('click', function () { useHit(hit); });
+                        body.appendChild(el('tr', null, [
+                            el('td', { text: hit.Name }),
+                            el('td', { text: ownedLabel(hit) }),
+                            el('td', { text: sourceLabel(hit.Source) }),
+                            el('td', null, [button])
+                        ]));
+                    });
+                    table.appendChild(body);
+                    box.appendChild(el('div', { className: 'bc-tablewrap' }, [table]));
+                    var libraryButton = $('#bcSuggestLibrary');
+                    if (response && response.RemainingLookups > 0) {
+                        libraryButton.querySelector('span').textContent = 'Keep looking';
+                    } else {
+                        libraryButton.querySelector('span').textContent = 'Suggest from my library';
+                    }
+                }
+
+                function applySuggestion(list) {
+                    var items = (list && list.Items) || [];
+                    if (!items.length) {
+                        setSuggestStatus((list && list.Message) || 'That list has no titles for the current Search in setting.');
+                        return;
+                    }
+                    var text = items.map(function (item) {
+                        return item.Year ? item.Title + ' (' + item.Year + ')' : item.Title;
+                    }).join('\n');
+                    $('#bcList').value = text;
+                    $('#bcCollectionName').value = list.Name || '';
+                    state.knownLines = items.map(function (item, index) {
+                        return { LineNumber: index + 1, TmdbId: item.TmdbId || null, MediaType: item.MediaType || null };
+                    });
+                    state.knownText = text;
+                    updateLineCount();
+                    updateCollectionHint();
+                    var wanted = (list.Name || '').trim().toLowerCase();
+                    var existing = state.collections.filter(function (c) { return (c.Name || '').trim().toLowerCase() === wanted; })[0];
+                    if (existing && !window.confirm('Add missing titles into existing "' + list.Name + '"? Preview will show what you already have. Nothing is added until you click Apply.')) {
+                        setSuggestStatus('List filled in. Preview was not run.');
+                        $('#bcList').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        return;
+                    }
+                    onPreview({ preventDefault: function () { } });
+                }
+
+                function useHit(hit) {
+                    setSuggestStatus('Loading ' + hit.Name + '…');
+                    var url = ApiClient.getUrl('PasteCollections/Suggest/Collection?source=' + encodeURIComponent(hit.Source) + '&id=' + encodeURIComponent(hit.Id) + '&mediaTypes=' + encodeURIComponent(mediaTypesNow()));
+                    ApiClient.ajax({ type: 'GET', url: url, dataType: 'json' }).then(applySuggestion, suggestFail);
+                }
+
+                function onSuggestSearch() {
+                    var query = $('#bcSuggestQuery').value.trim();
+                    if (query.length < 2) { setSuggestStatus('Enter at least 2 characters.'); return; }
+                    setSuggestStatus('Searching TMDB…');
+                    post('PasteCollections/Suggest/Search', { Query: query, MediaTypes: mediaTypesNow() }).then(renderHits, suggestFail);
+                }
+
+                function onSuggestLibrary() {
+                    var minOwned = parseInt($('#bcMinOwned').value, 10);
+                    setSuggestStatus('Checking your library against TMDB…');
+                    post('PasteCollections/Suggest/FromLibrary', {
+                        MinOwned: isNaN(minOwned) ? 1 : minOwned,
+                        MediaTypes: mediaTypesNow()
+                    }).then(renderHits, suggestFail);
+                }
+
+                function onTraktBrowse() {
+                    setSuggestStatus('Loading Trakt lists…');
+                    post('PasteCollections/Suggest/Trakt/Lists', { Username: $('#bcTraktUser').value.trim() }).then(renderHits, suggestFail);
+                }
+
+                function onTraktLoad() {
+                    setSuggestStatus('Loading that Trakt list…');
+                    post('PasteCollections/Suggest/Trakt/Items', { Url: $('#bcTraktUrl').value.trim(), MediaTypes: mediaTypesNow() }).then(applySuggestion, suggestFail);
+                }
+
+                function onPacksLoad() {
+                    setSuggestStatus('Loading packs…');
+                    var url = ApiClient.getUrl('PasteCollections/Suggest/Packs?mediaTypes=' + encodeURIComponent(mediaTypesNow()));
+                    ApiClient.ajax({ type: 'GET', url: url, dataType: 'json' }).then(renderHits, suggestFail);
+                }
+
                 $('#bcForm').addEventListener('submit', onPreview);
-                $('#bcList').addEventListener('input', updateLineCount);
+                $('#bcList').addEventListener('input', onListInput);
                 $('#bcCollectionName').addEventListener('input', updateCollectionHint);
                 $('#bcFilter').addEventListener('change', renderRows);
                 $('#bcSort').addEventListener('change', renderRows);
@@ -1169,6 +1413,15 @@
                 $('#bcPresetLoad').addEventListener('click', onPresetLoad);
                 $('#bcPresetSave').addEventListener('click', onPresetSave);
                 $('#bcPresetDelete').addEventListener('click', onPresetDelete);
+                $('#bcSuggestSave').addEventListener('click', onSuggestSave);
+                $('#bcSuggestSearch').addEventListener('click', onSuggestSearch);
+                $('#bcSuggestLibrary').addEventListener('click', onSuggestLibrary);
+                $('#bcTraktBrowse').addEventListener('click', onTraktBrowse);
+                $('#bcTraktLoad').addEventListener('click', onTraktLoad);
+                $('#bcPacksLoad').addEventListener('click', onPacksLoad);
+                $('#bcSuggestQuery').addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') { e.preventDefault(); onSuggestSearch(); }
+                });
                 $('#bcSeerrSave').addEventListener('click', onSeerrSave);
                 $('#bcSeerrTest').addEventListener('click', onSeerrTest);
                 $('#bcFillRun').addEventListener('click', onFillPosters);

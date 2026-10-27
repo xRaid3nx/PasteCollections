@@ -51,6 +51,31 @@ public class PluginConfiguration : BasePluginConfiguration
     public string SeerrApiKey { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the TMDB v3 API key. Blank means use Jellyfin's TMDB plugin key when one is set.
+    /// </summary>
+    public string TmdbApiKey { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the Trakt client id. No Trakt account login is used.
+    /// </summary>
+    public string TraktClientId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets an http(s) URL of a curated pack JSON file.
+    /// </summary>
+    public string CuratedPacksUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets how many hours suggested-list answers are remembered on this server.
+    /// </summary>
+    public int SuggestCacheHours { get; set; } = 24;
+
+    /// <summary>
+    /// Gets or sets the minimum owned titles before a library suggestion is shown.
+    /// </summary>
+    public int SuggestMinOwned { get; set; } = 1;
+
+    /// <summary>
     /// Gets or sets the saved list presets.
     /// </summary>
     [SuppressMessage("Usage", "CA2227:Collection properties should be read only", Justification = "Required for XML serialization.")]

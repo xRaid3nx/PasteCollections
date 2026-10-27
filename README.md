@@ -99,6 +99,21 @@ After the restart, go to **Dashboard**. **Paste Collections** appears in the lef
 
 ![Report after Apply](docs/screenshots/report.png)
 
+### Suggest a collection
+
+Open **Suggest collections** on the same page when you don't already have a list.
+
+- **Search** looks up franchise box sets on TMDB (for example *Star Wars*). Each result shows how many parts are already in your library, including zero.
+- **Suggest from my library** finds franchises where you already own at least one movie and offers the rest. It checks a batch at a time and remembers the answers on this server. Click **Keep looking** until it catches up.
+- **Trakt** loads a public list URL, or the public lists of a username. You paste a Trakt client id. You are not asked to log in.
+- **Packs** loads a JSON file you host (see [docs/sample-packs.json](docs/sample-packs.json)). The file is downloaded to the Jellyfin server and matched here.
+
+**Use this list** fills the title box and the collection name, then runs **Preview**. If that collection already exists, you are asked before the preview. Nothing is added until you click **Apply**. Missing titles still use **Request in Seerr** and **Request all "Not found" in Seerr** after the preview.
+
+Leave the TMDB key blank to use the key from Jellyfin's TMDB plugin, if you have set one. Set **Search in** the same way as a pasted list. TMDB franchises are movies.
+
+Your library list is not uploaded. Search sends the words you type. Suggesting from the library sends TMDB ids, the same kind of lookup Jellyfin already uses for metadata. API keys stay in the plugin settings on your server.
+
 ### Request missing titles in Seerr
 
 If you run [Seerr](https://docs.seerr.dev/) (or Jellyseerr/Overseerr), titles that are **Not found** can be requested straight from the preview or the report.

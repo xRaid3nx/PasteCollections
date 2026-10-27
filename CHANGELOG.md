@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here. Versions use Jellyfin's four-part format.
 
+## 1.2.0.0
+
+- Suggest collections: search TMDB franchises, suggest franchises you already own part of, load a Trakt list, or load a JSON pack. Choosing one fills the list and runs Preview. Nothing is added until Apply, and Seerr still runs only from the preview. A TMDB id on a suggested line matches that exact library item.
+
 ## 1.1.2.4
 
 - Fixed: posters and backdrops added by the plugin were not saved to Jellyfin's database, so they disappeared after a restart, a plugin update, or when Jellyfin reloaded the collection, and "Add missing posters and backdrops" kept re-adding them. Run it once more after updating and the artwork will stick.

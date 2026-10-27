@@ -41,6 +41,13 @@ Build for a different Jellyfin version with `-p:JellyfinVersion=x.y.z`. Analyzer
 - `POST /PasteCollections/Posters/Add`: `{ CollectionId, Poster }` (`TmdbThenCollage` or `TmdbOnly`) → `{ CollectionId, Poster, Backdrop, Message }`; artwork that already exists is reported as `NotAttempted`
 - `POST /PasteCollections/Seerr/Test`: `{ Url, ApiKey }` (blank values use the saved settings)
 - `POST /PasteCollections/Seerr/Request`: `{ Items: [{ LineNumber, Title, Year, MediaTypes, TmdbId?, MediaType? }] }`, at most 50 per call
+- `POST /PasteCollections/Preview` also accepts `KnownLines`: `[{ LineNumber, TmdbId, MediaType }]`. A TMDB id match is exact. Title matching is unchanged when the id is not in the library.
+- `POST /PasteCollections/Suggest/Search`: `{ Query, MediaTypes }` → `{ Hits: [{ Source, Id, Name, Owned, Total }], RemainingLookups, Message }`
+- `POST /PasteCollections/Suggest/FromLibrary`: `{ MinOwned, MaxLookups, MediaTypes }` → the same hit shape. One call looks up a bounded number of movies; `RemainingLookups` is what's left.
+- `GET /PasteCollections/Suggest/Collection?source=&id=&mediaTypes=` → `{ Source, Id, Name, Items: [{ Title, Year, TmdbId, MediaType }], Message }`
+- `POST /PasteCollections/Suggest/Trakt/Lists`: `{ Username }` → hits (parts not loaded yet)
+- `POST /PasteCollections/Suggest/Trakt/Items`: `{ Url, MediaTypes }` → a list ready to preview
+- `GET /PasteCollections/Suggest/Packs?mediaTypes=` → hits from the configured pack URL
 
 ## Releasing
 

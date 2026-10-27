@@ -13,6 +13,7 @@ namespace Jellyfin.Plugin.Collections.Core;
 /// <param name="Kind">Movie or series.</param>
 /// <param name="LibraryName">The library the item lives in, if known.</param>
 /// <param name="Path">The file system path, if any.</param>
+/// <param name="TmdbId">The TMDB id, when Jellyfin has one.</param>
 public sealed record CatalogEntry(
     Guid Id,
     string Name,
@@ -21,4 +22,5 @@ public sealed record CatalogEntry(
     int? Year,
     ItemKind Kind,
     string? LibraryName,
-    string? Path);
+    string? Path,
+    int? TmdbId = null);

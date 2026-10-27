@@ -38,4 +38,6 @@ Secondary goal: publishable later (clean, documented, GPL-3.0, tested, installab
 - **Posters for existing collections** (requested by the owner, 2026-10-24). One button fills in a missing poster and/or backdrop, the same way. Existing artwork is never replaced.
 - **Backdrop collage** (requested by the owner, 2026-10-24). When TMDB has no backdrop, a 16:9 collage of the first four member backdrops (the owner chose a collage over rotating or single backdrops).
 
+- **Suggest collections** (requested by the owner, 2026-10-26). On the same page, search TMDB franchises, suggest franchises the library already owns part of, load a Trakt list URL or a user's public lists, or load a curated JSON pack. Choosing one fills the collection name and the title list (with TMDB ids when the source has them) and runs Preview. It never applies by itself and never requests in Seerr until the user does that from the preview, the same as a pasted list. If a collection with that name already exists, the page asks before previewing a merge. The library is matched locally. API keys stay in the plugin configuration. A blank TMDB key falls back to Jellyfin's TMDB plugin key when one is set.
+
 Do **not** add features beyond the build prompt and the additions listed above.

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Jellyfin.Plugin.Collections.Core;
 
 namespace Jellyfin.Plugin.Collections.Api.Dto;
@@ -31,4 +32,9 @@ public sealed class PreviewRequest
     /// Gets or sets a value indicating whether fuzzy matching is enabled.
     /// </summary>
     public bool Fuzzy { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets TMDB ids for lines that came from a suggested list. Ignored when the pasted text was edited.
+    /// </summary>
+    public IReadOnlyList<KnownLineDto>? KnownLines { get; set; }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -8,6 +9,7 @@ using Jellyfin.Plugin.Collections.Core;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.Collections.Services;
@@ -112,7 +114,8 @@ public sealed class LibraryCatalog : ILibraryCatalog
                 item.ProductionYear,
                 kind.Value,
                 ResolveLibraryName(item.Path, libraries),
-                NullIfEmpty(item.Path)));
+                NullIfEmpty(item.Path),
+                ReadTmdbId(item)));
         }
 
         return entries;
@@ -156,4 +159,16 @@ public sealed class LibraryCatalog : ILibraryCatalog
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private static int? ReadTmdbId(BaseItem item)
+    {
+        if (!item.TryGetProviderId(MetadataProvider.Tmdb, out var raw)
+            || !int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id)
+            || id <= 0)
+        {
+            return null;
+        }
+
+        return id;
+    }
 }

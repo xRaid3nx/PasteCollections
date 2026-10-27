@@ -2,6 +2,7 @@ using Jellyfin.Plugin.Collections.Services;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Jellyfin.Plugin.Collections;
 
@@ -19,5 +20,9 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<BatchCollectionsService>();
         serviceCollection.AddSingleton<ISeerrSettings, PluginSeerrSettings>();
         serviceCollection.AddSingleton<SeerrService>();
+        serviceCollection.TryAddSingleton(applicationHost);
+        serviceCollection.AddSingleton<ISuggestSettings, PluginSuggestSettings>();
+        serviceCollection.AddSingleton<SuggestCache>();
+        serviceCollection.AddSingleton<SuggestService>();
     }
 }

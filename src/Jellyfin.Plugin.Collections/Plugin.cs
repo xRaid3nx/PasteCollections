@@ -37,7 +37,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override Guid Id => Guid.Parse(PluginId);
 
     /// <inheritdoc />
-    public override string Description => "Add many movies and shows to a collection at once by pasting a list of titles.";
+    public override string Description => "Add many movies and shows to a collection at once by pasting a list of titles, or by suggesting franchises from TMDB.";
 
     /// <summary>
     /// Gets the current plugin instance.

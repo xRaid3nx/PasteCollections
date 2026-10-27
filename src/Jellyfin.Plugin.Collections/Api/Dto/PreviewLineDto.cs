@@ -30,6 +30,16 @@ public sealed class PreviewLineDto
     public int? Year { get; set; }
 
     /// <summary>
+    /// Gets or sets a TMDB id that came with the line, when the list was suggested.
+    /// </summary>
+    public int? TmdbId { get; set; }
+
+    /// <summary>
+    /// Gets or sets <c>movie</c> or <c>tv</c> for <see cref="TmdbId"/>.
+    /// </summary>
+    public string? MediaType { get; set; }
+
+    /// <summary>
     /// Gets or sets the match status.
     /// </summary>
     public MatchStatus Status { get; set; }

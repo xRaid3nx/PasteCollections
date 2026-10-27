@@ -16,6 +16,7 @@ public sealed class Matcher
 
     private readonly Dictionary<string, List<CatalogEntry>> _strict = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<CatalogEntry>> _loose = new(StringComparer.Ordinal);
+    private readonly Dictionary<int, List<CatalogEntry>> _byTmdb = [];
     private readonly FuzzyIndex _fuzzy;
 
     /// <summary>
@@ -38,6 +39,17 @@ public sealed class Matcher
             {
                 Index(_strict, TitleNormalizer.Strict(title), entry);
                 Index(_loose, TitleNormalizer.Loose(title), entry);
+            }
+
+            if (entry.TmdbId is > 0)
+            {
+                if (!_byTmdb.TryGetValue(entry.TmdbId.Value, out var sameId))
+                {
+                    sameId = [];
+                    _byTmdb[entry.TmdbId.Value] = sameId;
+                }
+
+                sameId.Add(entry);
             }
         }
 
@@ -170,6 +182,11 @@ public sealed class Matcher
 
     private MatchResult MatchLine(ParsedLine line, MatchOptions options)
     {
+        if (line.TmdbId is > 0 && MatchTmdbId(line, line.TmdbId.Value, options) is { } byId)
+        {
+            return byId;
+        }
+
         var result = MatchTitle(line, line.Title, line.Year, options);
         if (result is null && line.BareYearTitle is not null && line.BareYear is not null)
         {
@@ -188,10 +205,38 @@ public sealed class Matcher
         return result ?? new MatchResult(line, MatchStatus.NotFound, null, [], null, false, null, null);
     }
 
+    private MatchResult? MatchTmdbId(ParsedLine line, int tmdbId, MatchOptions options)
+    {
+        if (!_byTmdb.TryGetValue(tmdbId, out var hits) || hits.Count == 0)
+        {
+            return null;
+        }
+
+        if (line.RemoteKind is { } kind)
+        {
+            hits = [.. hits.Where(entry => entry.Kind == kind)];
+            if (hits.Count == 0)
+            {
+                return null;
+            }
+        }
+
+        var pool = Ordered(Distinct(hits));
+        return pool.Count == 1
+            ? Selected(line, pool[0], options)
+            : Build(line, MatchStatus.Ambiguous, null, pool, options, note: "Several library items share this TMDB id. Choose one.");
+    }
+
     private MatchResult? MatchTitle(ParsedLine line, string title, int? year, MatchOptions options)
     {
         var strict = _strict.GetValueOrDefault(TitleNormalizer.Strict(title)) ?? [];
         var loose = _loose.GetValueOrDefault(TitleNormalizer.Loose(title)) ?? [];
+        if (line.RemoteKind is { } kind)
+        {
+            strict = [.. strict.Where(entry => entry.Kind == kind)];
+            loose = [.. loose.Where(entry => entry.Kind == kind)];
+        }
+
         if (strict.Count == 0 && loose.Count == 0)
         {
             return null;
@@ -259,6 +304,11 @@ public sealed class Matcher
         var seen = new HashSet<Guid>();
         foreach (var (entry, similarity) in hits)
         {
+            if (line.RemoteKind is { } kind && entry.Kind != kind)
+            {
+                continue;
+            }
+
             if (year is { } y && entry.Year is { } ey && Math.Abs(ey - y) > 1)
             {
                 continue;

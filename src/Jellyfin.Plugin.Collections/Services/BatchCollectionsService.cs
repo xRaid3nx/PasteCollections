@@ -90,7 +90,8 @@ public sealed class BatchCollectionsService
         }
 
         var parsed = ListParser.Parse(request.List);
-        if (parsed.Lines.Count == 0)
+        var lines = KnownLines.Apply(parsed.Lines, MapKnown(request.KnownLines));
+        if (lines.Count == 0)
         {
             throw new BatchRequestException("The list has no titles (only blank or comment lines).");
         }
@@ -104,7 +105,7 @@ public sealed class BatchCollectionsService
             ExistingMemberIds = target.Collection?.MemberIds ?? new HashSet<Guid>()
         };
 
-        var results = Matcher.Match(catalog, parsed.Lines, options, cancellationToken);
+        var results = Matcher.Match(catalog, lines, options, cancellationToken);
         var counts = Enum.GetValues<MatchStatus>().ToDictionary(s => s, s => results.Count(r => r.Status == s));
         _logger.LogInformation(
             "Paste Collections: preview for {Collection}: {Lines} lines, {Matched} matched, {NotFound} not found",
@@ -351,6 +352,25 @@ public sealed class BatchCollectionsService
         return trimmed;
     }
 
+    private static IReadOnlyList<KnownLine>? MapKnown(IReadOnlyList<KnownLineDto>? known)
+    {
+        if (known is null || known.Count == 0)
+        {
+            return null;
+        }
+
+        var list = new List<KnownLine>(Math.Min(known.Count, ListParser.MaxLines));
+        foreach (var item in known.Take(ListParser.MaxLines))
+        {
+            if (item.TmdbId is > 0)
+            {
+                list.Add(new KnownLine(item.LineNumber, item.TmdbId.Value, MediaTypeText.Parse(item.MediaType)));
+            }
+        }
+
+        return list;
+    }
+
     private static PreviewLineDto ToDto(MatchResult result)
     {
         return new PreviewLineDto
@@ -359,6 +379,8 @@ public sealed class BatchCollectionsService
             Raw = result.Line.Raw,
             Title = result.Line.Title,
             Year = result.Line.Year,
+            TmdbId = result.Line.TmdbId,
+            MediaType = result.Line.RemoteKind is { } kind ? MediaTypeText.Format(kind) : null,
             Status = result.Status,
             SelectedId = result.SelectedId,
             Selected = result.IsSelectedByDefault,
