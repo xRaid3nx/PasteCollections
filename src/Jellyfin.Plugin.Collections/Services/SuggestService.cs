@@ -15,7 +15,7 @@ namespace Jellyfin.Plugin.Collections.Services;
 
 /// <summary>
 /// Finds remote collections and scores them against the local library. Nothing is added until Preview and Apply.
-/// Library data stays on this server. Only the ids and search text needed for the chosen API are sent.
+/// Library data stays on this server. A stored TMDB id is sent when Jellyfin has one. Otherwise the title, year, or a stored IMDb id is sent.
 /// </summary>
 public sealed class SuggestService : IDisposable
 {
@@ -330,11 +330,11 @@ public sealed class SuggestService : IDisposable
         }
 
         var catalog = _catalog.GetEntries(MediaTypes.Movies, cancellationToken);
-        var movieIds = catalog.Where(entry => entry.TmdbId is > 0).Select(entry => entry.TmdbId!.Value).Distinct().ToList();
-        var pending = movieIds.Where(id => !_cache.TryGetMovie(id, out _)).ToList();
+        var distinct = DistinctMovies(catalog);
+        var pending = distinct.Where(NeedsLookup).ToList();
         var looked = 0;
         string? message = null;
-        foreach (var id in pending)
+        foreach (var entry in pending)
         {
             if (looked >= budget)
             {
@@ -342,8 +342,8 @@ public sealed class SuggestService : IDisposable
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            var membership = await LoadMovieAsync(id, cancellationToken).ConfigureAwait(false);
-            if (membership is null)
+            var tmdbId = await ResolveLibraryMovieAsync(entry, cancellationToken).ConfigureAwait(false);
+            if (_lastFailure != FailureKind.None)
             {
                 message = _lastFailure == FailureKind.RateLimited
                     ? RateLimitMessage("TMDB")
@@ -351,13 +351,32 @@ public sealed class SuggestService : IDisposable
                 break;
             }
 
-            _cache.RememberMovie(id, membership.Value.CollectionId, membership.Value.CollectionName);
+            if (tmdbId is not > 0)
+            {
+                looked++;
+                continue;
+            }
+
+            if (!_cache.TryGetMovie(tmdbId.Value, out _))
+            {
+                var membership = await LoadMovieAsync(tmdbId.Value, cancellationToken).ConfigureAwait(false);
+                if (membership is null)
+                {
+                    message = _lastFailure == FailureKind.RateLimited
+                        ? RateLimitMessage("TMDB")
+                        : _lastError ?? "TMDB could not be reached. What was found is saved on this server.";
+                    break;
+                }
+
+                _cache.RememberMovie(tmdbId.Value, membership.Value.CollectionId, membership.Value.CollectionName);
+            }
+
             looked++;
         }
 
         var groups = new Dictionary<int, string?>();
         var ownedByCollection = new Dictionary<int, int>();
-        foreach (var id in movieIds)
+        foreach (var id in ResolvedIds(distinct))
         {
             if (!_cache.TryGetMovie(id, out var link) || link.CollectionId is not int collectionId)
             {
@@ -413,9 +432,9 @@ public sealed class SuggestService : IDisposable
         }
         else if (message is null && ranked.Count == 0)
         {
-            message = movieIds.Count == 0
-                ? "None of your movies have a TMDB id yet, so franchises can't be suggested. Refresh metadata in Jellyfin, or search by name."
-                : "No franchises to suggest yet. A movie has to belong to a TMDB collection. Click Keep looking if lookups are still running.";
+            message = catalog.Count == 0
+                ? "There are no movies in the library to suggest from."
+                : "No franchises to suggest yet. Click Keep looking if lookups are still running. A movie has to belong to a TMDB collection.";
         }
 
         return Hits(ranked, remaining, message);
@@ -610,6 +629,173 @@ public sealed class SuggestService : IDisposable
             _lastError = "TMDB returned something this plugin could not read.";
             return null;
         }
+    }
+
+    private bool NeedsLookup(CatalogEntry entry)
+    {
+        if (entry.TmdbId is > 0)
+        {
+            return !_cache.TryGetMovie(entry.TmdbId.Value, out _);
+        }
+
+        if (!_cache.TryGetTitle(TitleKey(entry), out var tmdbId))
+        {
+            return true;
+        }
+
+        return tmdbId is > 0 && !_cache.TryGetMovie(tmdbId.Value, out _);
+    }
+
+    private IEnumerable<int> ResolvedIds(IReadOnlyList<CatalogEntry> movies)
+    {
+        var ids = new HashSet<int>();
+        foreach (var entry in movies)
+        {
+            if (entry.TmdbId is > 0)
+            {
+                ids.Add(entry.TmdbId.Value);
+            }
+            else if (_cache.TryGetTitle(TitleKey(entry), out var tmdbId) && tmdbId is > 0)
+            {
+                ids.Add(tmdbId.Value);
+            }
+        }
+
+        return ids;
+    }
+
+    private async Task<int?> ResolveLibraryMovieAsync(CatalogEntry entry, CancellationToken cancellationToken)
+    {
+        if (entry.TmdbId is > 0)
+        {
+            _lastFailure = FailureKind.None;
+            return entry.TmdbId;
+        }
+
+        var key = TitleKey(entry);
+        if (_cache.TryGetTitle(key, out var cached))
+        {
+            _lastFailure = FailureKind.None;
+            return cached;
+        }
+
+        _lastFailure = FailureKind.None;
+        int? resolved = null;
+        if (IsImdbId(entry.ImdbId))
+        {
+            resolved = await FindByImdbAsync(entry, cancellationToken).ConfigureAwait(false);
+            if (_lastFailure != FailureKind.None)
+            {
+                return null;
+            }
+        }
+
+        if (resolved is not > 0)
+        {
+            resolved = await SearchMovieAsync(entry, cancellationToken).ConfigureAwait(false);
+            if (_lastFailure != FailureKind.None)
+            {
+                return null;
+            }
+        }
+
+        _cache.RememberTitle(key, resolved);
+        return resolved;
+    }
+
+    private async Task<int?> FindByImdbAsync(CatalogEntry entry, CancellationToken cancellationToken)
+    {
+        var body = await GetAsync(
+            TmdbUri("find/" + Uri.EscapeDataString(entry.ImdbId!) + "?external_source=imdb_id"),
+            null,
+            cancellationToken).ConfigureAwait(false);
+        if (body.Missing)
+        {
+            return null;
+        }
+
+        if (!body.Ok || body.Text is null)
+        {
+            Note(body, "TMDB");
+            return null;
+        }
+
+        try
+        {
+            return MovieSearchPick.Pick(entry.Name, entry.OriginalTitle, entry.Year, TmdbResponses.ReadFindMovies(body.Text));
+        }
+        catch (JsonException)
+        {
+            _lastFailure = FailureKind.Failed;
+            _lastError = "TMDB returned something this plugin could not read.";
+            return null;
+        }
+    }
+
+    private async Task<int?> SearchMovieAsync(CatalogEntry entry, CancellationToken cancellationToken)
+    {
+        var query = "search/movie?query=" + Uri.EscapeDataString(entry.Name) + "&include_adult=false&language=en-US";
+        if (entry.Year is int year)
+        {
+            query += "&year=" + year.ToString(CultureInfo.InvariantCulture);
+        }
+
+        var body = await GetAsync(TmdbUri(query), null, cancellationToken).ConfigureAwait(false);
+        if (!body.Ok || body.Text is null)
+        {
+            Note(body, "TMDB");
+            return null;
+        }
+
+        try
+        {
+            return MovieSearchPick.Pick(entry.Name, entry.OriginalTitle, entry.Year, TmdbResponses.ReadMovieSearch(body.Text));
+        }
+        catch (JsonException)
+        {
+            _lastFailure = FailureKind.Failed;
+            _lastError = "TMDB returned something this plugin could not read.";
+            return null;
+        }
+    }
+
+    private static List<CatalogEntry> DistinctMovies(IReadOnlyList<CatalogEntry> catalog)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var list = new List<CatalogEntry>();
+        foreach (var entry in catalog)
+        {
+            var key = entry.TmdbId is > 0 ? "id:" + entry.TmdbId.Value.ToString(CultureInfo.InvariantCulture) : "title:" + TitleKey(entry);
+            if (seen.Add(key))
+            {
+                list.Add(entry);
+            }
+        }
+
+        return list;
+    }
+
+    private static string TitleKey(CatalogEntry entry)
+    {
+        return TitleNormalizer.Strict(entry.Name) + "|" + (entry.Year?.ToString(CultureInfo.InvariantCulture) ?? string.Empty);
+    }
+
+    private static bool IsImdbId(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || id.Length is < 5 or > 20 || !id.StartsWith("tt", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        for (var i = 2; i < id.Length; i++)
+        {
+            if (!char.IsDigit(id[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private async Task<MovieMembership?> LoadMovieAsync(int id, CancellationToken cancellationToken)

@@ -273,6 +273,55 @@ public sealed class SuggestTests : IDisposable
     }
 
     [Fact]
+    public void MovieSearchPick_KeepsOneClearTitleAndYear()
+    {
+        var hits = new List<MovieHit>
+        {
+            new(11, "Star Wars", null, 1977),
+            new(140607, "Star Wars", null, 2015)
+        };
+
+        Assert.Equal(11, MovieSearchPick.Pick("Star Wars", null, 1977, hits));
+        Assert.Null(MovieSearchPick.Pick("Star Wars", null, null, hits));
+        Assert.Null(MovieSearchPick.Pick("Star Wars", null, 1999, hits));
+    }
+
+    [Fact]
+    public async Task FromLibrary_ResolvesAMovieByTitleWhenThereIsNoTmdbId()
+    {
+        var response = await RunTitleLibraryAsync(
+            new CatalogEntry(Guid.NewGuid(), "Star Wars", null, null, 1977, ItemKind.Movie, "Movies", null),
+            remote =>
+            {
+                remote.MovieSearch = """{ "results": [ { "id": 11, "title": "Star Wars", "release_date": "1977-05-25" } ] }""";
+                remote.Movie = """{ "id": 11, "belongs_to_collection": { "id": 10, "name": "Star Wars Collection" } }""";
+                remote.Collection = CollectionJson;
+            });
+
+        var hit = Assert.Single(response.Response.Hits);
+        Assert.Equal(1, hit.Owned);
+        Assert.Equal(2, hit.Total);
+        Assert.Contains(response.Paths, path => path.Contains("/search/movie", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task FromLibrary_UsesAnImdbIdBeforeTheTitle()
+    {
+        var response = await RunTitleLibraryAsync(
+            new CatalogEntry(Guid.NewGuid(), "Star Wars", null, null, 1977, ItemKind.Movie, "Movies", null, null, "tt0076759"),
+            remote =>
+            {
+                remote.Find = """{ "movie_results": [ { "id": 11, "title": "Star Wars", "release_date": "1977-05-25" } ] }""";
+                remote.Movie = """{ "id": 11, "belongs_to_collection": { "id": 10, "name": "Star Wars Collection" } }""";
+                remote.Collection = CollectionJson;
+            });
+
+        Assert.Single(response.Response.Hits);
+        Assert.Contains(response.Paths, path => path.Contains("/find/", StringComparison.Ordinal));
+        Assert.DoesNotContain(response.Paths, path => path.Contains("/search/movie", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task GetCollection_ReturnsTitlesForPreview()
     {
         _remote.Collection = CollectionJson;
@@ -314,6 +363,34 @@ public sealed class SuggestTests : IDisposable
         Assert.Equal("pack", hit.Source);
         Assert.Equal(1, hit.Owned);
         Assert.Equal(2, hit.Total);
+    }
+
+    private async Task<(SuggestHitsResponse Response, List<string> Paths)> RunTitleLibraryAsync(CatalogEntry movie, Action<FakeRemote> arrange)
+    {
+        var remote = new FakeRemote();
+        arrange(remote);
+        var cachePath = Path.Combine(Path.GetTempPath(), "paste-collections-suggest-" + Guid.NewGuid().ToString("N") + ".json");
+        var cache = new SuggestCache(cachePath, () => 24, NullLogger<SuggestCache>.Instance);
+        using var service = new SuggestService(
+            new ListCatalog([movie]),
+            new FakeSettings(),
+            cache,
+            NullLogger<SuggestService>.Instance,
+            new HttpClient(remote),
+            true,
+            TimeSpan.Zero);
+        try
+        {
+            var response = await service.FromLibraryAsync(new SuggestLibraryRequest { MinOwned = 1, MediaTypes = MediaTypes.Movies }, CancellationToken.None);
+            return (response, remote.Paths);
+        }
+        finally
+        {
+            if (File.Exists(cachePath))
+            {
+                File.Delete(cachePath);
+            }
+        }
     }
 
     private const string CollectionJson = """
@@ -379,6 +456,10 @@ public sealed class SuggestTests : IDisposable
 
         public string Movie { get; set; } = """{ "id": 11, "belongs_to_collection": null }""";
 
+        public string MovieSearch { get; set; } = """{ "results": [] }""";
+
+        public string Find { get; set; } = """{ "movie_results": [] }""";
+
         public string TraktItems { get; set; } = "[]";
 
         public string Packs { get; set; } = """{ "packs": [] }""";
@@ -387,6 +468,8 @@ public sealed class SuggestTests : IDisposable
 
         public int Calls { get; private set; }
 
+        public List<string> Paths { get; } = [];
+
         public string? LastQuery { get; private set; }
 
         public string? LastTraktKey { get; private set; }
@@ -394,6 +477,7 @@ public sealed class SuggestTests : IDisposable
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Calls++;
+            Paths.Add(request.RequestUri!.AbsolutePath);
             LastQuery = request.RequestUri?.Query;
             if (request.Headers.TryGetValues("trakt-api-key", out var keys))
             {
@@ -404,6 +488,16 @@ public sealed class SuggestTests : IDisposable
             if (path.Contains("/search/collection", StringComparison.Ordinal))
             {
                 return Task.FromResult(Json(HttpStatusCode.OK, Search));
+            }
+
+            if (path.Contains("/search/movie", StringComparison.Ordinal))
+            {
+                return Task.FromResult(Json(HttpStatusCode.OK, MovieSearch));
+            }
+
+            if (path.Contains("/find/", StringComparison.Ordinal))
+            {
+                return Task.FromResult(Json(HttpStatusCode.OK, Find));
             }
 
             if (path.Contains("/collection/", StringComparison.Ordinal))

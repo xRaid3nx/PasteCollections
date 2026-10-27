@@ -112,7 +112,7 @@ Open **Suggest collections** on the same page when you don't already have a list
 
 Leave the TMDB key blank to use the key from Jellyfin's TMDB plugin, if you have set one. Set **Search in** the same way as a pasted list. TMDB franchises are movies.
 
-Your library list is not uploaded. Search sends the words you type. Suggesting from the library sends TMDB ids, the same kind of lookup Jellyfin already uses for metadata. API keys stay in the plugin settings on your server.
+Your library list is not uploaded. Search sends the words you type. Suggest from my library asks TMDB about one movie at a time. If Jellyfin already stored a TMDB id, that id is sent. Otherwise the title and year are sent, or an IMDb id when Jellyfin has one. A title is used only when one TMDB movie matches. API keys stay in the plugin settings on your server.
 
 ### Request missing titles in Seerr
 

@@ -115,7 +115,8 @@ public sealed class LibraryCatalog : ILibraryCatalog
                 kind.Value,
                 ResolveLibraryName(item.Path, libraries),
                 NullIfEmpty(item.Path),
-                ReadTmdbId(item)));
+                ReadTmdbId(item),
+                ReadImdbId(item)));
         }
 
         return entries;
@@ -170,5 +171,16 @@ public sealed class LibraryCatalog : ILibraryCatalog
         }
 
         return id;
+    }
+
+    private static string? ReadImdbId(BaseItem item)
+    {
+        if (!item.TryGetProviderId(MetadataProvider.Imdb, out var raw) || string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var id = raw.Trim();
+        return id.Length is > 2 and <= 20 && id.StartsWith("tt", StringComparison.OrdinalIgnoreCase) ? id : null;
     }
 }

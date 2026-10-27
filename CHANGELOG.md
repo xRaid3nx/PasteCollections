@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here. Versions use Jellyfin's four-part format.
 
+## 1.2.0.1
+
+- Suggest from my library looks a movie up by its title and year, or by an IMDb id when Jellyfin already has one, when the movie has no TMDB id. A metadata refresh is not required.
+
 ## 1.2.0.0
 
 - Suggest collections: search TMDB franchises, suggest franchises you already own part of, load a Trakt list, or load a JSON pack. Choosing one fills the list and runs Preview. Nothing is added until Apply, and Seerr still runs only from the preview. A TMDB id on a suggested line matches that exact library item.

@@ -101,6 +101,45 @@ public sealed class SuggestCache
     }
 
     /// <summary>
+    /// Reads a fresh title lookup. A null id means the title was checked and did not match one movie.
+    /// </summary>
+    /// <param name="key">The title key.</param>
+    /// <param name="tmdbId">The TMDB id, or null when there was no clear match.</param>
+    /// <returns>True when a fresh lookup exists.</returns>
+    public bool TryGetTitle(string key, out int? tmdbId)
+    {
+        lock (_gate)
+        {
+            EnsureLoaded();
+            var row = _data.Titles.Find(title => string.Equals(title.Key, key, StringComparison.Ordinal));
+            if (row is null || !Fresh(row.FetchedUtc))
+            {
+                tmdbId = null;
+                return false;
+            }
+
+            tmdbId = row.TmdbId;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Stores a title lookup, including "no clear match".
+    /// </summary>
+    /// <param name="key">The title key.</param>
+    /// <param name="tmdbId">The TMDB id, or null.</param>
+    public void RememberTitle(string key, int? tmdbId)
+    {
+        lock (_gate)
+        {
+            EnsureLoaded();
+            _data.Titles.RemoveAll(title => string.Equals(title.Key, key, StringComparison.Ordinal));
+            _data.Titles.Add(new CacheTitle { Key = key, TmdbId = tmdbId, FetchedUtc = DateTime.UtcNow });
+            Save();
+        }
+    }
+
+    /// <summary>
     /// Reads a fresh remote list.
     /// </summary>
     /// <param name="source">The source id.</param>
@@ -263,6 +302,11 @@ public sealed class SuggestCache
             _data.Movies = [.. _data.Movies.OrderByDescending(movie => movie.FetchedUtc).Take(MaxMovies)];
         }
 
+        if (_data.Titles.Count > MaxMovies)
+        {
+            _data.Titles = [.. _data.Titles.OrderByDescending(title => title.FetchedUtc).Take(MaxMovies)];
+        }
+
         if (_data.Lists.Count > MaxLists)
         {
             _data.Lists = [.. _data.Lists.OrderByDescending(list => list.FetchedUtc).Take(MaxLists)];
@@ -326,9 +370,20 @@ public sealed class SuggestCache
     {
         public List<CacheMovie> Movies { get; set; } = [];
 
+        public List<CacheTitle> Titles { get; set; } = [];
+
         public List<CacheList> Lists { get; set; } = [];
 
         public List<CacheStamp> Stamps { get; set; } = [];
+    }
+
+    private sealed class CacheTitle
+    {
+        public string Key { get; set; } = string.Empty;
+
+        public int? TmdbId { get; set; }
+
+        public DateTime FetchedUtc { get; set; }
     }
 
     private sealed class CacheMovie

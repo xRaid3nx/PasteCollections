@@ -44,6 +44,26 @@ public static class TmdbResponses
     }
 
     /// <summary>
+    /// Reads <c>search/movie</c> results.
+    /// </summary>
+    /// <param name="json">The response body.</param>
+    /// <returns>The movies.</returns>
+    public static IReadOnlyList<MovieHit> ReadMovieSearch(string json)
+    {
+        return ReadMovieHits(json, "results");
+    }
+
+    /// <summary>
+    /// Reads <c>movie_results</c> from <c>find</c>.
+    /// </summary>
+    /// <param name="json">The response body.</param>
+    /// <returns>The movies.</returns>
+    public static IReadOnlyList<MovieHit> ReadFindMovies(string json)
+    {
+        return ReadMovieHits(json, "movie_results");
+    }
+
+    /// <summary>
     /// Reads one collection, including its parts.
     /// </summary>
     /// <param name="json">The response body.</param>
@@ -112,6 +132,40 @@ public static class TmdbResponses
 
         var name = Text(collection, "name");
         return new MovieMembership(collectionId, name.Length == 0 ? null : name);
+    }
+
+    private static IReadOnlyList<MovieHit> ReadMovieHits(string json, string arrayName)
+    {
+        var list = new List<MovieHit>();
+        using var document = JsonDocument.Parse(json);
+        if (!document.RootElement.TryGetProperty(arrayName, out var results) || results.ValueKind != JsonValueKind.Array)
+        {
+            return list;
+        }
+
+        foreach (var result in results.EnumerateArray())
+        {
+            if (!TryId(result, out var id))
+            {
+                continue;
+            }
+
+            var title = Text(result, "title");
+            if (title.Length == 0)
+            {
+                title = Text(result, "name");
+            }
+
+            if (title.Length == 0)
+            {
+                continue;
+            }
+
+            var original = Text(result, "original_title");
+            list.Add(new MovieHit(id, title, original.Length == 0 ? null : original, Year(Text(result, "release_date"))));
+        }
+
+        return list;
     }
 
     private static bool TryId(JsonElement element, out int id)
