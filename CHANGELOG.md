@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here. Versions use Jellyfin's four-part format.
 
+## 1.2.0.2
+
+- Suggest collections is one button: Suggest from my library. Choosing a franchise fills the list and runs Preview. Search, Trakt, packs, and the extra suggest settings are no longer on the page.
+
 ## 1.2.0.1
 
 - Suggest from my library looks a movie up by its title and year, or by an IMDb id when Jellyfin already has one, when the movie has no TMDB id. A metadata refresh is not required.

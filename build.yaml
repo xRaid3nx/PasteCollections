@@ -1,7 +1,7 @@
 ---
 name: "Paste Collections"
 guid: "d7904f73-f7e5-4b0a-ae99-a33d1afd11b1"
-version: "1.2.0.1"
+version: "1.2.0.2"
 targetAbi: "12.2.0.0"
 framework: "net10.0"
 overview: "Add many movies and shows to a collection at once by pasting a list of titles."
